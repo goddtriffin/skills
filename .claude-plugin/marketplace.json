@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "goddtriffin-skills",
+  "description": "Todd Griffin's personal collection of Claude Code plugins and skills.",
+  "owner": {
+    "name": "Todd Griffin",
+    "email": "tgriffin115@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "mattpocock",
+      "source": "./plugins/mattpocock",
+      "description": "Skills from Matt Pocock. Includes grill-me: relentlessly interview the user about a plan or design until reaching shared understanding, resolving each branch of the decision tree."
+    }
+  ]
+}

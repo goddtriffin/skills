@@ -1,0 +1,10 @@
+{
+  "name": "mattpocock",
+  "version": "0.1.0",
+  "description": "Skills from Matt Pocock. Includes grill-me: relentlessly interview the user about a plan or design until reaching shared understanding, resolving each branch of the decision tree.",
+  "author": {
+    "name": "Todd Griffin",
+    "email": "tgriffin115@gmail.com"
+  },
+  "keywords": ["planning", "design-review", "interview", "stress-test"]
+}
