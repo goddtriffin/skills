@@ -5,10 +5,8 @@ Todd Griffin's personal Claude Code plugin marketplace.
 ## Adding the marketplace
 
 ```
-/plugin marketplace add /Users/toddgriffin/Documents/code/skills
+/plugin marketplace add goddtriffin/skills
 ```
-
-(or, once pushed to GitHub, `/plugin marketplace add <owner>/<repo>`)
 
 Then install a plugin:
 
@@ -20,7 +18,11 @@ Then install a plugin:
 
 | Plugin | Skills | Description |
 | --- | --- | --- |
-| `mattpocock` | `grill-me` | Skills from [Matt Pocock](https://github.com/mattpocock). `grill-me` relentlessly interviews you about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Triggers on "grill me" or wanting a plan stress-tested. |
+| `mattpocock` | `grill-me` | Skills originally authored by [Matt Pocock](https://github.com/mattpocock). `grill-me` relentlessly interviews you about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Triggers on "grill me" or wanting a plan stress-tested. |
+
+## Attribution
+
+The `grill-me` skill was originally written by [Matt Pocock](https://github.com/mattpocock); this repo packages it as a Claude Code plugin.
 
 ## Structure
 
