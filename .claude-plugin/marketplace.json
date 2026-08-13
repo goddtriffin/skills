@@ -8,6 +8,11 @@
   },
   "plugins": [
     {
+      "name": "goddtriffin",
+      "source": "./plugins/goddtriffin",
+      "description": "Todd Griffin's own Claude Code skills."
+    },
+    {
       "name": "mattpocock",
       "source": "./plugins/mattpocock",
       "description": "Skills from Matt Pocock. Includes grill-me: relentlessly interview the user about a plan or design until reaching shared understanding, resolving each branch of the decision tree."
