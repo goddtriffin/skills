@@ -10,7 +10,7 @@
     {
       "name": "goddtriffin",
       "source": "./plugins/goddtriffin",
-      "description": "Todd Griffin's own Claude Code skills."
+      "description": "Todd Griffin's own Claude Code skills. Includes audit-agent-docs: grade a repo's agent-facing documentation against a fixed standard; and mock-design: how a reusable mock implementation of an injectable interface seeds responses, records calls, and proves every seeded response was consumed."
     },
     {
       "name": "mattpocock",

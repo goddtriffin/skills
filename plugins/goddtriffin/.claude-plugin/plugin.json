@@ -1,10 +1,17 @@
 {
   "name": "goddtriffin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Todd Griffin's own Claude Code skills.",
   "author": {
     "name": "Todd Griffin",
     "email": "tgriffin115@gmail.com"
   },
-  "keywords": ["documentation", "standards", "code-review", "skills"]
+  "keywords": [
+    "documentation",
+    "standards",
+    "code-review",
+    "skills",
+    "testing",
+    "mocks"
+  ]
 }
