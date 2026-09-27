@@ -10,7 +10,7 @@
     {
       "name": "goddtriffin",
       "source": "./plugins/goddtriffin",
-      "description": "Todd Griffin's own Claude Code skills. Includes audit-agent-docs: grade a repo's agent-facing documentation against a fixed standard; and mock-design: how a reusable mock implementation of an injectable interface seeds responses, records calls, and proves every seeded response was consumed; and upgrade-rust-repos: upgrade one Rust repo or a directory of them to the latest dependencies, edition, rust-version, and resolver, in dependency order, with zero regressions."
+      "description": "Todd Griffin's own Claude Code skills. Includes audit-agent-docs: grade a repo's agent-facing documentation against a fixed standard; and mock-design: how a reusable mock implementation of an injectable interface seeds responses, records calls, and proves every seeded response was consumed; and migrate-rust-repos: change one Rust repo or a directory of them — upgrade to the latest dependencies, edition, rust-version, and resolver, swap crates, or apply fleet-wide refactors — repo by repo in dependency order, with zero regressions."
     },
     {
       "name": "mattpocock",

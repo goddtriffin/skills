@@ -1,6 +1,6 @@
 {
   "name": "goddtriffin",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Todd Griffin's own Claude Code skills.",
   "author": {
     "name": "Todd Griffin",
@@ -16,6 +16,8 @@
     "rust",
     "cargo",
     "dependencies",
-    "upgrades"
+    "upgrades",
+    "migrations",
+    "refactoring"
   ]
 }

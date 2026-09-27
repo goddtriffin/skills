@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic helpers for the upgrade-rust-repos skill.
+"""Deterministic helpers for the migrate-rust-repos skill.
 
 Python 3.9+, standard library only. Every subcommand is idempotent and derives
 its answer from the repos, the toolchain, and crates.io — there is no run state.
@@ -8,9 +8,11 @@ The only thing written outside a repo is an immutable download cache.
 Subcommands:
   preflight                 check required and optional tools
   targets                   update stable, print latest toolchain/edition/resolver
-  report PATH               discover repos, dependency graph, per-repo state
+  report PATH               discover repos, dependency graph, migration order
+                            (--upgrade: upgrade gaps; --uses CRATE: who depends on it)
   changelogs PATH           fetch changelogs for every direct-dependency bump
   bump REPO                 edition migration, toolchain fields, dependency bumps
+  follow REPO CRATE...      move first-party deps to their latest published versions
   set-version REPO LEVEL    bump a library's version (LEVEL: patch | minor)
   wait-published CRATE VER  block until crates.io serves CRATE@VER
 """
@@ -30,8 +32,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-USER_AGENT = "upgrade-rust-repos (https://github.com/goddtriffin/skills)"
-CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "upgrade-rust-repos"
+USER_AGENT = "migrate-rust-repos (https://github.com/goddtriffin/skills)"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "migrate-rust-repos"
 KNOWN_EDITIONS = ["2015", "2018", "2021", "2024"]  # only for stepping; the target is discovered
 CHANGELOG_NAME = re.compile(r"^(CHANGELOG|CHANGES|RELEASES|RELEASE-NOTES|HISTORY|NEWS)", re.I)
 DEP_TABLE = re.compile(r"^(workspace\.)?(target\..+\.)?(dev-|build-)?dependencies$")
@@ -257,6 +259,15 @@ def discover(path):
                   key=lambda d: d.name.lower())
 
 
+def skipped(path):
+    """Git repos in a directory that discovery skips: no root Cargo.toml."""
+    path = path.resolve()
+    if (path / "Cargo.toml").exists():
+        return []
+    return sorted(d.name for d in path.iterdir()
+                  if d.is_dir() and (d / ".git").exists() and not (d / "Cargo.toml").exists())
+
+
 def manifests(repo, meta):
     """Root manifest plus every workspace member's manifest (deduplicated)."""
     out = [repo / "Cargo.toml"]
@@ -373,16 +384,30 @@ def compute_targets(update=False):
 
 # ---------------------------------------------------------------- report
 
-def repo_state(repo, targets):
+def uses(repo, meta, crates):
+    """Every manifest line declaring one of `crates` directly (renames resolved)."""
+    hits = []
+    for mf in manifests(repo, meta):
+        for e in dep_entries(mf.read_text()):
+            if e["crate"] in crates:
+                how = "inherited" if e["inherited"] else (e["req"] or e["kind"])
+                hits.append(f"{e['crate']}: {mf.relative_to(repo)} [{e['table']}] {how}")
+    return hits
+
+
+def repo_state(repo, targets=None, uses_crates=()):
+    """Discovery and graph inputs always; upgrade findings only when `targets` is given."""
     root_text = (repo / "Cargo.toml").read_text()
     meta, err = cargo_metadata(repo)
     st = {"repo": repo.name, "path": str(repo), "layout": layout(root_text),
           "branch": git(repo, "rev-parse", "--abbrev-ref", "HEAD"),
           "default_branch": default_branch(repo),
           "dirty": bool(git(repo, "status", "--porcelain")),
-          "metadata_error": err, "packages": [], "provides": [], "deps": [], "findings": []}
+          "metadata_error": err, "packages": [], "provides": [], "deps": [], "findings": [],
+          "uses": [], "dockerfile_rust": [], "doc_msrv_mentions": []}
     if meta is None:
         return st
+    st["uses"] = uses(repo, meta, set(uses_crates))
     ws = st["layout"] != "single-crate"
     tbl = "workspace.package" if ws else "package"
     member_ids = set(meta.get("workspace_members", []))
@@ -394,6 +419,12 @@ def repo_state(repo, targets):
                                "edition": p["edition"], "rust_version": p.get("rust_version")})
         if p.get("publish") != []:
             st["provides"].append(p["name"])
+    if targets is None:
+        st["deps"] = [{"manifest": str(mf.relative_to(repo)), "crate": e["crate"], "kind": e["kind"],
+                       "req": e["req"]}
+                      for mf in manifests(repo, meta) for e in dep_entries(mf.read_text())
+                      if not e["inherited"]]
+        return st
     cur = {"edition": string_value(get(root_text, tbl, "edition")),
            "rust_version": string_value(get(root_text, tbl, "rust-version")),
            "resolver": string_value(get(root_text, "workspace" if ws else "package", "resolver"))}
@@ -503,16 +534,20 @@ def graph(states):
 
 
 def cmd_report(args):
-    targets = compute_targets()
-    states = [repo_state(r, targets) for r in discover(Path(args.path))]
+    targets = compute_targets() if args.upgrade else None
+    states = [repo_state(r, targets, args.uses) for r in discover(Path(args.path))]
     if not states:
         die(f"no Rust repos at {args.path}")
     order, tiers, edges = graph(states)
     if args.json:
         print(json.dumps({"targets": targets, "order": order, "tiers": tiers, "edges": edges,
-                          "repos": states}, indent=2))
+                          "skipped": skipped(Path(args.path)), "repos": states}, indent=2))
         return
-    print(f"# Targets\n{json.dumps(targets)}\n\n# Upgrade order (tier: repo)")
+    if skipped(Path(args.path)):
+        print(f"# Skipped (git repos without a root Cargo.toml)\n  {', '.join(skipped(Path(args.path)))}\n")
+    if targets:
+        print(f"# Targets\n{json.dumps(targets)}\n")
+    print("# Migration order (tier: repo)")
     for r in order:
         print(f"  {tiers[r]}: {r}")
     if edges:
@@ -527,6 +562,8 @@ def cmd_report(args):
             continue
         for p in s["packages"]:
             print(f"  crate {p['name']} {p['version']} {'lib' if p['publishable_lib'] else 'bin/unpublished'}")
+        if args.uses:
+            print("\n".join(f"  uses {h}" for h in s["uses"]) or f"  uses none of: {', '.join(args.uses)}")
         for f in s["findings"]:
             print(f"  - {f}")
         for d in s["deps"]:
@@ -780,6 +817,35 @@ def cmd_bump(args):
     print(json.dumps({"targets": targets, "changes": changes}, indent=2))
 
 
+def cmd_follow(args):
+    repo = Path(args.repo).resolve()
+    if not shutil.which("cargo-upgrade"):
+        die("cargo-upgrade not found; install it with `cargo install cargo-edit`")
+    mp = ["--manifest-path", str(repo / "Cargo.toml")]
+    held = []
+    for crate in args.crates:
+        latest = latest_stable(crate)
+        if not latest:
+            die(f"{crate} has no stable version on crates.io")
+        p = run(["cargo", "upgrade", "--incompatible", "-p", f"{crate}@{latest}", *mp], check=False)
+        if p.returncode != 0:
+            die(f"cargo upgrade -p {crate}@{latest} failed:\n{p.stdout}{p.stderr}")
+        print(p.stdout.strip())
+        run(["cargo", "update", "-p", crate, *mp])
+        meta, err = cargo_metadata(repo)
+        if meta is None:
+            die(f"cargo metadata failed: {err}")
+        reqs = [e["req"] for mf in manifests(repo, meta) for e in dep_entries(mf.read_text())
+                if e["crate"] == crate and e["req"]]
+        if not reqs:
+            held.append(f"{crate}: not a direct registry dependency of {repo.name}")
+        held += [f"{crate}: requirement {r} is not {latest} (rust-version too old for it, or a "
+                 f"non-M.m.p requirement cargo upgrade skips)" for r in reqs if r.lstrip("^") != latest]
+    if held:
+        die("not every crate moved to its latest version:\n  " + "\n  ".join(held))
+    print(f"{repo.name}: {', '.join(args.crates)} at latest")
+
+
 # ---------------------------------------------------------------- set-version / wait / preflight
 
 def cmd_set_version(args):
@@ -817,7 +883,8 @@ def cmd_preflight(_):
         found = shutil.which(tool)
         ok &= bool(found)
         print(f"{'ok     ' if found else 'MISSING'} {tool}{'' if found else f'  -> {fix}'}")
-    for tool, why in [("gh", "GitHub release notes when a crate ships no changelog file"),
+    for tool, why in [("gh", "opening and watching PRs (the default way changes land), and GitHub "
+                             "release notes when a crate ships no changelog file"),
                       ("cargo-semver-checks", "confirms the library version-bump level; "
                        "cargo install cargo-semver-checks")]:
         print(f"{'ok     ' if shutil.which(tool) else 'optional'} {tool}  ({why})")
@@ -841,9 +908,17 @@ def main():
         p.add_argument("path")
         p.add_argument("--json", action="store_true")
         p.set_defaults(fn=fn)
+        if name == "report":
+            p.add_argument("--upgrade", action="store_true", help="include upgrade gaps vs the targets")
+            p.add_argument("--uses", nargs="+", default=[], metavar="CRATE",
+                           help="list where each repo depends on CRATE directly")
     p = sub.add_parser("bump")
     p.add_argument("repo")
     p.set_defaults(fn=cmd_bump)
+    p = sub.add_parser("follow")
+    p.add_argument("repo")
+    p.add_argument("crates", nargs="+", metavar="CRATE")
+    p.set_defaults(fn=cmd_follow)
     p = sub.add_parser("set-version")
     p.add_argument("repo")
     p.add_argument("level", choices=["patch", "minor"])
