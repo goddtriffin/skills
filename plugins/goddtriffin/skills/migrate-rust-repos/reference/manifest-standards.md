@@ -1,7 +1,7 @@
 # Manifest standards
 
 Where every upgraded setting lives, per repo layout, and why. `bump` applies the automatic parts;
-the rest surface in `report` for the user to approve.
+the rest surface in `report --upgrade` for the user to approve.
 
 ## Layouts
 
@@ -54,6 +54,6 @@ A clippy config that held nothing else is deleted, along with whatever reference
 
 - Only crates with a library target and `publish` not `false` are version-bumped. Binaries keep
   their version, except as a side effect of a lockstep workspace version.
-- Breaking → minor; anything else → patch, at every major including ≥ 1.0 (see SKILL.md step 3g).
-- **Independently versioned workspace** (members carry their own `version`): `report` flags it; do not
+- Breaking → minor; anything else → patch, at every major including ≥ 1.0 (see SKILL.md step 3e).
+- **Independently versioned workspace** (members carry their own `version`): `report --upgrade` flags it; do not
   use `set-version` there. Bump each library crate's own manifest, following the repo's convention.

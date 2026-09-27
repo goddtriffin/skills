@@ -5,7 +5,7 @@ twice — across repos in one run, or across runs.
 
 ## The cache
 
-Root: `~/.cache/upgrade-rust-repos/` (or `$XDG_CACHE_HOME/upgrade-rust-repos/`).
+Root: `~/.cache/migrate-rust-repos/` (or `$XDG_CACHE_HOME/migrate-rust-repos/`).
 
 | Path | Written by | Contents |
 | --- | --- | --- |
