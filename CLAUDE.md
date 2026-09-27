@@ -15,6 +15,7 @@ codebase they operate on. There is no build, no test suite, and no runtime.
 | --- | --- | --- |
 | `audit-agent-docs` | `goddtriffin` | Reviewing, refactoring, or standardizing a repo's agent-facing docs — `CLAUDE.md`, `README.md`, vendored skills, skill-index tables — or deciding whether a skill has grown too broad to stay one skill. |
 | `mock-design` | `goddtriffin` | Writing, reviewing, or refactoring a reusable mock implementation of a dependency-injected interface/trait, or deciding how a mock seeds responses, records calls, and verifies seeded responses were consumed. |
+| `upgrade-rust-repos` | `goddtriffin` | Upgrading one Rust repo, or a directory of them, to the latest dependencies, edition, `rust-version`, and resolver (retiring duplicate clippy `msrv`) — changelog impact, migration, and rollout in dependency order — or reporting their upgrade state and order. |
 | `grill-me` | `mattpocock` | Stress-testing a plan or design by being interviewed until every branch of the decision tree is resolved. |
 
 ## Working in this repo
