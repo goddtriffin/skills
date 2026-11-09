@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<!-- Starter shell for a mockup round. A starting point, not a framework: edit freely. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mockups v1</title>
+<style>
+  body { margin: 0; font: 14px system-ui, sans-serif; background: #e9e9ee; }
+  #bar { position: sticky; top: 0; z-index: 1; background: #fff; padding: 8px 12px;
+         border-bottom: 1px solid #ccc; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .group b { margin-right: 4px; }
+  .group button { border: 1px solid #999; background: #fff; padding: 2px 8px; cursor: pointer; }
+  .group button[aria-pressed="true"] { background: #222; color: #fff; }
+  #why { padding: 8px 12px; max-width: 70em; }
+  #frames { display: flex; flex-wrap: wrap; gap: 24px; padding: 12px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { margin-bottom: 4px; }
+  .phone { border: 12px solid #111; border-radius: 36px; overflow: hidden; }
+  .desk { overflow: hidden; border: 1px solid #999; }
+  .desk iframe { transform: scale(.6); transform-origin: 0 0; }
+  iframe { border: 0; display: block; background: #fff; }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<p id="why"></p>
+<div id="frames"></div>
+<script>
+const SIZES = { 'iPhone 15': [390, 844], 'iPhone SE': [375, 667], 'iPhone Pro Max': [430, 932],
+                'Desktop': [1440, 900] };
+const TODAY = 'http://127.0.0.1:8080'; // the product's local dev server
+
+// One state object drives everything.
+const S = { theme: 'light', sizes: ['iPhone 15', 'Desktop'], page: 'home',
+            source: 'B', homeLayout: 'A', homeState: 'filled' };
+
+// Toggle groups. `show` hides a group unless its page is selected; `multi` allows several.
+const GROUPS = [
+  { key: 'theme', label: 'Theme', options: ['light', 'dark'] },
+  { key: 'sizes', label: 'Sizes', options: Object.keys(SIZES), multi: true },
+  { key: 'source', label: 'Show', options: { A: 'A · Today', B: 'B · Redesign', AB: 'Both' } },
+  { key: 'page', label: 'Page', options: ['home', 'settings'] },
+  { key: 'homeLayout', label: 'Layout', show: 'home',
+    options: { A: 'A · Stacked', B: 'B · Two-column' } },
+  { key: 'homeState', label: 'State', show: 'home',
+    options: ['filled', 'empty', 'loading', 'error', 'dialog'] },
+];
+const WHY = {
+  home: 'A keeps one column everywhere; B uses desktop width but splits attention.',
+  settings: '',
+};
+const PATHS = { home: '/', settings: '/settings' }; // the page's route in today's product
+
+// Shared CSS for every mockup page. Seed from the product's real tokens.
+const CSS = `
+  :root { --bg: #fff; --fg: #111; }
+  .dark { --bg: #121212; --fg: #eee; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px system-ui;
+         min-height: 100dvh; }
+  .dialog { position: fixed; inset: auto 16px 16px; padding: 16px; background: var(--bg);
+            border: 1px solid; }
+`;
+
+// Page bodies: return HTML for the current state.
+function home() {
+  if (S.homeState === 'loading') return '<p>Loading…</p>';
+  if (S.homeState === 'error') return '<p>Something went wrong.</p>';
+  const list = S.homeState === 'empty' ? '<p>Nothing yet.</p>' : '<ul><li>One</li><li>Two</li></ul>';
+  const dialog = S.homeState === 'dialog' ? '<div class="dialog">Dialog</div>' : '';
+  const cols = S.homeLayout === 'B' ? 'display:grid;grid-template-columns:1fr 1fr' : '';
+  return `<main style="${cols}"><h1>Home</h1>${list}</main>${dialog}`;
+}
+function settings() { return '<main><h1>Settings</h1></main>'; }
+const PAGES = { home, settings };
+
+function docFor(page) {
+  return `<!DOCTYPE html><html class="${S.theme}"><head><meta name="viewport"
+    content="width=device-width,initial-scale=1"><style>${CSS}</style></head>
+    <body>${PAGES[page]()}</body></html>`;
+}
+
+function frame(name, src) {
+  const [w, h] = SIZES[name];
+  const desk = name === 'Desktop';
+  const f = document.createElement('figure');
+  const iframe = document.createElement('iframe');
+  iframe.width = w; iframe.height = h;
+  if (src.startsWith('http')) iframe.src = src; else iframe.srcdoc = src;
+  const box = document.createElement('div');
+  box.className = desk ? 'desk' : 'phone';
+  if (desk) { box.style.width = w * .6 + 'px'; box.style.height = h * .6 + 'px'; }
+  box.append(iframe);
+  const open = src.startsWith('http') ? src
+    : URL.createObjectURL(new Blob([src], { type: 'text/html' }));
+  f.innerHTML = `<figcaption>${name} ${w}×${h} · <a href="${open}" target="_blank">Open full size</a></figcaption>`;
+  f.append(box);
+  return f;
+}
+
+function frames() {
+  const out = [];
+  for (const name of S.sizes) {
+    if (S.source !== 'B') out.push(frame(name, TODAY + PATHS[S.page]));
+    if (S.source !== 'A') out.push(frame(name, docFor(S.page)));
+  }
+  return out;
+}
+
+function renderBar() {
+  const bar = document.getElementById('bar');
+  bar.innerHTML = '';
+  for (const g of GROUPS) {
+    if (g.show && g.show !== S.page) continue;
+    const opts = Array.isArray(g.options) ? Object.fromEntries(g.options.map(o => [o, o])) : g.options;
+    const div = document.createElement('div');
+    div.className = 'group';
+    div.innerHTML = `<b>${g.label}</b>`;
+    for (const [value, text] of Object.entries(opts)) {
+      const b = document.createElement('button');
+      b.textContent = text;
+      const on = g.multi ? S[g.key].includes(value) : S[g.key] === value;
+      b.setAttribute('aria-pressed', on);
+      b.onclick = () => {
+        if (g.multi) S[g.key] = on ? S[g.key].filter(v => v !== value) : [...S[g.key], value];
+        else S[g.key] = value;
+        render();
+      };
+      div.append(b);
+    }
+    bar.append(div);
+  }
+}
+
+function render() {
+  renderBar();
+  document.getElementById('why').textContent = WHY[S.page] || '';
+  document.getElementById('frames').replaceChildren(...frames());
+}
+render();
+</script>
+</body>
+</html>
