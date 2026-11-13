@@ -93,17 +93,20 @@ correctness = { level = "deny", priority = -1 }
 suspicious = { level = "deny", priority = -1 }
 style = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
+manual_readme = { level = "allow", priority = 1 }
 ```
 
 - **Nothing looser.** Remove any other allow — a nursery lint allowed by name is already allowed.
+- **`manual_readme` is the one exception.** `cargo package` always writes `readme` into the
+  packaged manifest and carries `[lints.cargo]` with it, so denying it fails every `cargo publish`
+  verification. Never work around a publish failure with `--no-verify`.
 - **Stricter additions stay.** A repo that also denies `restriction` lints (`unwrap_used`,
   `indexing_slicing`, …) keeps them after the standard keys.
 - **`allow_attributes` forbid** turns every `#[allow]` into `#[expect(..., reason = "...")]` or a
   code fix; `unfulfilled_lint_expectations` forbid then catches each stale `#[expect]`.
 - **`[lints.cargo]`** (stable since Rust 1.100) makes Cargo's own lints errors —
   `unused_dependencies`, `unused_workspace_dependencies`, `unused_workspace_package_fields`,
-  `missing_lints_inheritance`, `redundant_homepage`; `pedantic` adds `non_kebab_case_bins` and
-  `manual_readme`. Clippy's `-D warnings` never covered these. Fix an unused dependency by removing
+  `missing_lints_inheritance`, `redundant_homepage`; `pedantic` adds `non_kebab_case_bins`. Clippy's `-D warnings` never covered these. Fix an unused dependency by removing
   it, or moving it to the table it belongs in (e.g. `dev-dependencies`). For hidden candidates the
   lint skips, run once:
   `CARGO_LOG=cargo::diagnostics::rules::unused_dependencies=debug cargo check --workspace --all-targets --all-features`.
