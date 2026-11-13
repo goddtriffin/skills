@@ -1,7 +1,7 @@
 # Upgrade
 
 The **upgrade** change: bring a repo to the latest of everything — dependencies, edition,
-`rust-version`, resolver, Docker build image. SKILL.md owns the loop around it; this file owns what
+`rust-version`, resolver, Docker build image — and onto the fleet lint standard. SKILL.md owns the loop around it; this file owns what
 is specific to upgrading.
 
 ## Contents
@@ -69,6 +69,8 @@ compile under migration — fix it and re-run. Then:
   `clippy.toml`/`.clippy.toml` left with nothing else. Remove every reference `bump` prints as
   `STILL REFERENCES` — a Dockerfile `COPY` of a deleted file fails the image build; a Cargo
   `include` entry is stale.
+- **Lints** — bring the lint table and the Makefile clippy lines onto the standard in
+  `manifest-standards.md#lints`. The errors it surfaces are fixed in code like any new lint.
 - **Approved plan decisions** — requirement rewrites, moves to the workspace level, doc deletions.
 
 Then apply the impact list and run the fix loop. New clippy lints from the new toolchain are fixed
@@ -76,8 +78,8 @@ in code, never allowed.
 
 ## Commit message
 
-Lists the toolchain/edition moves and the breaking dependency bumps, with a line each on what
-migrated.
+Lists the toolchain/edition moves, the breaking dependency bumps with a line each on what migrated,
+any lint-standard change, and every unused dependency removed.
 
 ## Rules
 

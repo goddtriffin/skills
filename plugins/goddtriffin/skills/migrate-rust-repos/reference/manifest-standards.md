@@ -57,3 +57,57 @@ A clippy config that held nothing else is deleted, along with whatever reference
 - Breaking → minor; anything else → patch, at every major including ≥ 1.0 (see SKILL.md step 3e).
 - **Independently versioned workspace** (members carry their own `version`): `report --upgrade` flags it; do not
   use `set-version` there. Bump each library crate's own manifest, following the repo's convention.
+
+## Lints
+
+Every repo carries the same lint table: the strictest settings short of `nursery`, with every
+warning a hard error. `report --upgrade` does not check it; compare by hand and bring the repo onto
+it as part of an upgrade.
+
+| Layout | Lives in |
+| --- | --- |
+| workspace | `[workspace.lints.rust]`, `[workspace.lints.clippy]`, `[workspace.lints.cargo]`; every member `[lints] workspace = true` |
+| single crate | `[lints.rust]`, `[lints.clippy]`, `[lints.cargo]` |
+
+```toml
+[workspace.lints.rust]
+unsafe_code = { level = "forbid", priority = 0 }
+unfulfilled_lint_expectations = { level = "forbid", priority = 1 }
+unused = { level = "deny", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+style = { level = "deny", priority = -1 }
+complexity = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
+nursery = { level = "allow", priority = 0 }
+allow_attributes = { level = "forbid", priority = 1 }
+multiple_crate_versions = { level = "allow", priority = 1 }
+
+[workspace.lints.cargo]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+style = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+```
+
+- **Nothing looser.** Remove any other allow — a nursery lint allowed by name is already allowed.
+- **Stricter additions stay.** A repo that also denies `restriction` lints (`unwrap_used`,
+  `indexing_slicing`, …) keeps them after the standard keys.
+- **`allow_attributes` forbid** turns every `#[allow]` into `#[expect(..., reason = "...")]` or a
+  code fix; `unfulfilled_lint_expectations` forbid then catches each stale `#[expect]`.
+- **`[lints.cargo]`** (stable since Rust 1.100) makes Cargo's own lints errors —
+  `unused_dependencies`, `unused_workspace_dependencies`, `unused_workspace_package_fields`,
+  `missing_lints_inheritance`, `redundant_homepage`; `pedantic` adds `non_kebab_case_bins` and
+  `manual_readme`. Clippy's `-D warnings` never covered these. Fix an unused dependency by removing
+  it, or moving it to the table it belongs in (e.g. `dev-dependencies`). For hidden candidates the
+  lint skips, run once:
+  `CARGO_LOG=cargo::diagnostics::rules::unused_dependencies=debug cargo check --workspace --all-targets --all-features`.
+- **Makefile.** The `lint` target's clippy line is
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and `fix` is the same
+  with `--fix --allow-dirty --allow-staged`. Keep extra invocations that cover more (a feature
+  matrix).

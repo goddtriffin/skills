@@ -1,6 +1,6 @@
 ---
 name: migrate-rust-repos
-description: Use when changing one Rust repo, or a directory of Rust repos, repo by repo in dependency order — upgrading to the latest dependency versions, Rust edition, rust-version (retiring duplicate clippy msrv), and Cargo resolver; swapping one crate for another across repos (e.g. chrono to jiff, xml-builder to quick-xml); or applying a refactor or convention fleet-wide (e.g. libraries re-exporting their dependencies) — including migrating code, publishing libraries before their dependents, and rolling out. Also use when asked for the upgrade state of Rust repos, which repos depend on a crate, or which order interdependent Rust repos must be changed in.
+description: Use when changing one Rust repo, or a directory of Rust repos, repo by repo in dependency order — upgrading to the latest dependency versions, Rust edition, rust-version (retiring duplicate clippy msrv), and Cargo resolver, and onto the fleet's strictest lint standard (clippy, rustc, and Cargo lints all denied); swapping one crate for another across repos (e.g. chrono to jiff, xml-builder to quick-xml); or applying a refactor or convention fleet-wide (e.g. libraries re-exporting their dependencies) — including migrating code, publishing libraries before their dependents, and rolling out. Also use when asked for the upgrade state of Rust repos, which repos depend on a crate, or which order interdependent Rust repos must be changed in.
 ---
 
 # Migrate Rust repos
@@ -16,7 +16,7 @@ lockstep: every first-party dependent on the latest release of every first-party
 
 | Change | What | Owner |
 | --- | --- | --- |
-| **upgrade** | Latest toolchain, edition, `rust-version`, resolver, dependencies, Docker build image | `reference/upgrade.md` |
+| **upgrade** | Latest toolchain, edition, `rust-version`, resolver, dependencies, Docker build image, fleet lint standard | `reference/upgrade.md` |
 | **custom** | Anything the user describes: a crate swap, a refactor, a repo-wide convention. Each is pinned down by a confirmed spec | `reference/custom-change.md` |
 | **follow upstream** | Implicit: a repo whose first-party library was released earlier in this run moves to that release and adapts — **even when it is a patch** | this file |
 
@@ -117,8 +117,8 @@ override this skill's defaults** wherever they conflict — gates, commit style,
 #### c. Baseline gate
 
 Run the repo's green gate on the untouched tree — its documented gate, else `make lint test` if
-both targets exist, else `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D
-warnings`, `cargo test --all-features`. Record the passing test count per test binary (the
+both targets exist, else `cargo fmt --check`, `cargo clippy --workspace --all-targets
+--all-features -- -D warnings`, `cargo test --all-features`. Record the passing test count per test binary (the
 `test result: ok. N passed` lines).
 
 **Red baseline:** this repo was already failing before any change. Offer to fix it first. Proceed
@@ -143,6 +143,8 @@ upstream's, **pause** — raising it is an upgrade decision for the user.
 
 - **Fix root causes.** Never `#[allow]`/`#[expect]` a new lint, loosen or delete a test, add
   `#[ignore]`, or pin a dependency back to dodge a migration.
+- **Zero warnings of any kind** — rustc, clippy, and Cargo's own (`cargo::unused_dependencies` and
+  the rest are separate from clippy's `-D warnings`; the lint standard denies them).
 - **Same tests, not fewer.** The passing count per test binary must be ≥ the baseline. A drop
   means tests silently stopped compiling in (a feature or `cfg` change) — find out why.
 - **Behavior changes need a human.** If a fix changes behavior a user could observe beyond what the
