@@ -181,17 +181,21 @@ crate's own manifest by hand.
 
 #### f. Land
 
-**Default: PRs.** Commit directly to the default branch only when the repo explicitly documents
-that it does.
+**Default: PRs you merge yourself.** The user has authorized merging your own PRs and committing
+straight to the default branch on their behalf. Use a PR unless the repo documents committing
+directly, or the user asks for it. Every step the repo requires *before* landing (an image push, a
+smoke test, production config) still happens first.
 
 - **Group commits by review size.** Small changes share one PR, one commit per change. A large
   change gets its own PR. The version-bump commit goes in the last PR to merge. Say how you split
   them and why.
 - Push, open the PR(s) with `gh pr create` following any PR template, and watch the checks.
-- **Wait for the merge.** A library must be merged before it is tagged and published, and
-  dependents cannot start until then — do not start another repo meanwhile. Tell the user what is
-  ready to merge, watch with `gh pr view` / `gh pr checks`, and continue once it merges; then
-  `git pull` the default branch.
+- **Merge it.** Once the gate and checks pass and the pre-merge rollout steps are done,
+  `gh pr merge` in the repo's usual style, then `git pull` the default branch. A library must be
+  merged before it is tagged and published, and dependents cannot start until then.
+- **Never bypass protection.** If branch protection still blocks a plain merge, do not use
+  `--admin` or any other override: stop with the PR ready, tell the user, and continue once it
+  merges.
 - If the repo merges by squash, that convention wins; the separate commits still serve review.
 
 #### g. Rollout
@@ -205,9 +209,9 @@ Follow the repo's own procedure exactly when it has one. Otherwise, the fallback
 - **Binary:** stop at merged. Ask whether anything else ships it (an image push, a deploy); never
   invent deploy steps.
 
-**Irreversible actions** — `cargo publish`, pushing a tag, pushing an image, deploying, committing
-straight to a default branch — need the user's confirmation the first time each kind occurs in a
-run; later occurrences of the same kind proceed. A repo's own documented procedure overrides this.
+**Irreversible actions** — `cargo publish`, pushing a tag, pushing an image, deploying — need the
+user's confirmation the first time each kind occurs in a run; later occurrences of the same kind
+proceed. Merging your own PRs and committing to a default branch are pre-authorized. A repo's own documented procedure overrides this.
 
 ### 4. Finish
 
