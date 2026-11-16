@@ -9,6 +9,17 @@ codebase they operate on. There is no build, no test suite, and no runtime.
 - `plugins/<author>/.claude-plugin/plugin.json` — one plugin per skill author.
 - `plugins/<author>/skills/<skill>/SKILL.md` — the skill; `reference/*.md` beside it loads on demand.
 
+## Global instructions
+
+`global/CLAUDE.md` is the source of truth for `~/.claude/CLAUDE.md` on every machine Todd uses.
+
+- Change it here, in a PR, never only in `~/.claude/CLAUDE.md`. After it merges, copy it into place:
+  `cp global/CLAUDE.md ~/.claude/CLAUDE.md`.
+- If `~/.claude/CLAUDE.md` was edited directly, copy it back here and open a PR the same session, so
+  nothing lives only on one laptop.
+- It loads on every turn of every session: keep it as short as possible while keeping every rule
+  actionable. Never put secrets or private details in it.
+
 ## Skill index
 
 | Skill | Plugin | Trigger |

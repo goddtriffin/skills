@@ -10,6 +10,15 @@ Todd Griffin's personal Claude Code plugin marketplace.
 /plugin install mattpocock@goddtriffin-skills
 ```
 
+## Global instructions
+
+`global/CLAUDE.md` is Todd's global Claude Code instructions, loaded by every session on every machine.
+Install or update it on a machine:
+
+```
+cp global/CLAUDE.md ~/.claude/CLAUDE.md
+```
+
 ## Plugin: `goddtriffin`
 
 Skills written by Todd Griffin.
