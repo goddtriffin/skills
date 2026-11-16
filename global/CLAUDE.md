@@ -17,8 +17,13 @@ The disk runs low; build artifacts are the usual cause. Check `df -h .`; above ~
 - `cargo clean` only in repos this session works in, after (or before) a build-heavy task. Another
   session's `target/` may belong to a long run that looks idle. Clean other repos only when Todd asks.
 - Delete scratch crates and `CARGO_TARGET_DIR`s you made.
-- Docker: when done, remove the containers, images and volumes you created. When the disk is tight and
-  nobody else is building (`docker ps`), `docker builder prune -f` and `docker volume prune -f` are safe.
+- Docker goes through the repo's Makefile targets, never ad hoc commands; add missing targets. Every
+  image built gets `--label repo=<repo>`, so a session can find its own. Run containers with `--rm`.
+- Each rebuild orphans the old image. The build target then runs
+  `docker image prune -f --filter label=repo=<repo>`, which removes only this repo's dangling images.
+- Keep a tagged image while you rerun it unchanged. When the work is done, `make docker-clean` removes
+  the repo's containers, images and volumes. Clean only the repo you work in, never another's.
+- When the disk is tight and nobody else is building (`docker ps`), `docker builder prune -f` is safe.
   Never `docker system prune -a --volumes`. Stop Docker with `docker desktop stop`.
 - If the disk is still too full, tell Todd.
 
