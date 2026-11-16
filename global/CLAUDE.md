@@ -54,9 +54,9 @@ bulky output kept there is paid for again and again. A helper pays once and retu
 
 - Helpers run on Sonnet (`CLAUDE_CODE_SUBAGENT_MODEL=sonnet` in `~/.claude/settings.json`; older sessions
   pass `model: "sonnet"`). Use `model: "opus"` only for hard design or debugging.
-- The main agent talks with Todd, decides, briefs, reviews and merges. It delegates bulky or many-step
-  work: implementation, tests, browsers and screenshots, logs and metrics, wide searches. Small things
-  (a few tool calls) it does itself.
+- The main agent talks with Todd, decides, briefs, reviews and merges (only where the repo lets agents
+  merge; helpers never do). It delegates bulky or many-step work: implementation, tests, browsers and
+  screenshots, logs and metrics, wide searches. Small things (a few tool calls) it does itself.
 - Brief fully (goal, files, what is ruled out, how to verify); ask for a short report with exact failing
   test names and key error lines. The helper that wrote the code runs its tests and fixes what it can; no
   runner-to-analyst-to-fixer chains.
