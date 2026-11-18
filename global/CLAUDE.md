@@ -17,6 +17,11 @@ The disk runs low; build artifacts are the usual cause. Check `df -h .`; above ~
 - `cargo clean` only in repos this session works in, after (or before) a build-heavy task. Another
   session's `target/` may belong to a long run that looks idle. Clean other repos only when Todd asks.
 - Delete scratch crates and `CARGO_TARGET_DIR`s you made.
+- Simulators and emulators: list what's installed (`xcrun simctl runtime list`; `sdkmanager --list_installed`,
+  `avdmanager list avd`). Keep the newest iOS, the supported minimum, and every runtime, system image or AVD a
+  repo pins (grep the repos and their Makefile targets, e.g. `make android-avds`). Delete the rest
+  (`xcrun simctl runtime delete <id>`, then `xcrun simctl delete unavailable`; `avdmanager delete avd -n <name>`,
+  `sdkmanager --uninstall <pkg>`), only while no session is using them.
 - Docker goes through the repo's Makefile targets, never ad hoc commands; add missing targets. Every
   image built gets `--label repo=<repo>`, so a session can find its own. Run containers with `--rm`.
 - Each rebuild orphans the old image. The build target then runs
