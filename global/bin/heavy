@@ -30,7 +30,14 @@ load1() {
 reclaim() {
   if mkdir "$reap" 2>/dev/null; then
     local h; h=$(holder)
-    if [ -d "$lock" ] && { alive "$h" || { [ -z "$h" ] && [ "$(age "$lock")" -lt 10 ]; }; }; then :; elif [ "$(holder)" = "$h" ]; then rm -rf "$lock"; fi
+    if [ -d "$lock" ]; then
+      if [ -n "$h" ]; then
+        # A dead holder cannot change the lock, and only a reaper (one at a time) removes it.
+        alive "$h" || { [ "$(holder)" = "$h" ] && rm -rf "$lock"; }
+      elif [ "$(age "$lock")" -ge 10 ] && [ -z "$(holder)" ]; then
+        rm -rf "$lock"   # taken over 10 s ago and never got a pid: its taker died
+      fi
+    fi
     rm -rf "$reap"
   elif [ "$(age "$reap")" -ge 30 ]; then
     rm -rf "$reap"   # a reaper died mid-reclaim
@@ -43,7 +50,7 @@ while :; do
   if [ "$load" -ge "$max_load" ]; then
     reason="load $load >= $max_load"
   elif mkdir "$lock" 2>/dev/null; then
-    echo $$ > "$lock/pid"
+    echo $$ > "$lock/pid" || continue   # lock vanished under us: try again
     break
   else
     reason="lock held by pid $(holder)"
