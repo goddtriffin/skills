@@ -10,6 +10,17 @@ Several Claude sessions work in the same checkouts and Docker at once. Touch onl
   Never touch another session's worktree.
 - Never delete a branch without a merged PR whose head matches it. If unsure, leave it and tell Todd.
 
+### One heavy job per machine (Todd, 2026-11-19)
+
+All sessions share one laptop. On 2026-11-19 it hit load 120 on 16 cores and Docker and background jobs died.
+- Heavy work takes the machine-wide lock first: cargo build, test or clippy, xcodebuild, gradle, Playwright
+  or UI checks, docker build, benches. Take it with `mkdir /tmp/heavy.lock`, write your pid to
+  `/tmp/heavy.lock/pid`, and release it with `rm -rf /tmp/heavy.lock`, also on failure.
+- If the lock is held, wait, then retry. If its pid is dead, the lock is stale: remove it.
+- One heavy job at a time per machine. Never fan out parallel builds or tests.
+- Before starting heavy work, check `uptime`. If the 1-minute load is above about 16, wait.
+- Quit idle simulators, browsers and dev servers you started.
+
 ## Disk space
 
 The disk runs low; build artifacts are the usual cause. Check `df -h .`; above ~90%, clean first.
