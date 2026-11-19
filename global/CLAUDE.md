@@ -19,7 +19,8 @@ All sessions share one laptop. On 2026-11-19 it hit load 120 on 16 cores and Doc
   `/tmp/heavy.lock` (a dead holder's lock is stale and removed) and for the load to drop, then always releases.
   Install: `ln -sf ~/Documents/code/skills/global/bin/heavy ~/.local/bin/heavy`.
 - One heavy job at a time per machine. Never fan out parallel builds or tests.
-- Before starting heavy work, check `uptime`. If the 1-minute load is above about 16, wait.
+- `heavy` also waits while the 1-minute load is 16 or more. For heavy work it cannot wrap (an Xcode GUI build),
+  check `uptime` first and wait while the load is above about 16.
 - Quit idle simulators, browsers and dev servers you started.
 
 ## Disk space

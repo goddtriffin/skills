@@ -1,35 +1,61 @@
 #!/usr/bin/env bash
 # heavy: run one heavy command at a time per machine (Todd, 2026-11-19).
 # Usage: heavy <command> [args...]
-# Waits for /tmp/heavy.lock (stale if its pid is dead) and for the 1-minute load to drop below
-# HEAVY_MAX_LOAD (default 16), runs the command, and always releases the lock.
+# Waits until the 1-minute load is below HEAVY_MAX_LOAD (default 16, compared as an integer) and
+# /tmp/heavy.lock is free, takes the lock, runs the command, and releases the lock when it exits.
+# A lock whose holder is dead (or that never got a pid within 10 s) is stale and is reclaimed.
 set -u
-lock=/tmp/heavy.lock
+lock=${HEAVY_LOCK:-/tmp/heavy.lock}   # override only for tests
+reap=$lock.reap
 max_load=${HEAVY_MAX_LOAD:-16}
 [ $# -gt 0 ] || { echo "usage: heavy <command> [args...]" >&2; exit 2; }
-# Nested call (a heavy Makefile target run under heavy): the lock is already ours.
-[ -n "${HEAVY_HELD:-}" ] && exec "$@"
 
-load1() { sysctl -n vm.loadavg 2>/dev/null | awk '{print int($2)}' || awk '{print int($1)}' /proc/loadavg; }
+holder() { cat "$lock/pid" 2>/dev/null || true; }
+alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
+age() { echo $(( $(date +%s) - $(stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || date +%s) )); }
 
-said=0
-while :; do
-  if mkdir "$lock" 2>/dev/null; then
-    echo $$ > "$lock/pid"
-    if [ "$(load1)" -lt "$max_load" ]; then break; fi
-    rm -rf "$lock"
-    reason="load $(load1) >= $max_load"
-  else
-    holder=$(cat "$lock/pid" 2>/dev/null || true)
-    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
-      rm -rf "$lock"; continue   # stale: holder is dead
-    fi
-    reason="lock held by pid ${holder:-?}"
+# Nested call (a heavy Makefile target run under heavy): pass through only if our ancestor holds the lock now.
+if [ -n "${HEAVY_HELD:-}" ] && [ "$(holder)" = "$HEAVY_HELD" ] && alive "$HEAVY_HELD"; then exec "$@"; fi
+
+load1() {
+  local l
+  if [ -r /proc/loadavg ]; then l=$(awk '{print int($1)}' /proc/loadavg)
+  else l=$(sysctl -n vm.loadavg 2>/dev/null | awk '{print int($2)}'); fi
+  case "$l" in ''|*[!0-9]*) echo "heavy: cannot read the load average" >&2; exit 3 ;; esac
+  echo "$l"
+}
+
+# Reclaim a stale lock. The reap mutex makes the check-and-remove atomic, so two waiters that both saw
+# the same dead holder cannot delete a lock a third process has just taken.
+reclaim() {
+  if mkdir "$reap" 2>/dev/null; then
+    local h; h=$(holder)
+    if [ -d "$lock" ] && { alive "$h" || { [ -z "$h" ] && [ "$(age "$lock")" -lt 10 ]; }; }; then :; else rm -rf "$lock"; fi
+    rm -rf "$reap"
+  elif [ "$(age "$reap")" -ge 30 ]; then
+    rm -rf "$reap"   # a reaper died mid-reclaim
   fi
-  [ $said = 1 ] || { echo "heavy: waiting ($reason)" >&2; said=1; }
-  sleep 5   # retry on a held resource, not polling for data
+}
+
+said=""
+while :; do
+  load=$(load1) || exit 3
+  if [ "$load" -ge "$max_load" ]; then
+    reason="load $load >= $max_load"
+  elif mkdir "$lock" 2>/dev/null; then
+    echo $$ > "$lock/pid"
+    break
+  else
+    reason="lock held by pid $(holder)"
+    reclaim
+  fi
+  [ "$said" = "$reason" ] || { echo "heavy: waiting ($reason)" >&2; said=$reason; }
+  sleep 5   # retry on a busy shared resource, not polling for data
 done
 
-trap 'rm -rf "$lock"' EXIT
-trap 'exit 130' INT TERM
+release() { [ "$(holder)" = "$$" ] && rm -rf "$lock"; }
+trap release EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 HEAVY_HELD=$$ "$@"
