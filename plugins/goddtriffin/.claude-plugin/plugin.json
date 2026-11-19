@@ -1,6 +1,6 @@
 {
   "name": "goddtriffin",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Todd Griffin's own Claude Code skills.",
   "author": {
     "name": "Todd Griffin",
@@ -23,6 +23,9 @@
     "ux",
     "design",
     "mockups",
-    "prototyping"
+    "prototyping",
+    "shakedown",
+    "device-review",
+    "screenshots"
   ]
 }

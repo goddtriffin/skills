@@ -28,6 +28,7 @@ codebase they operate on. There is no build, no test suite, and no runtime.
 | `mock-design` | `goddtriffin` | Writing, reviewing, or refactoring a reusable mock implementation of a dependency-injected interface/trait, or deciding how a mock seeds responses, records calls, and verifies seeded responses were consumed. |
 | `migrate-rust-repos` | `goddtriffin` | Changing one Rust repo, or a directory of them, repo by repo in dependency order — upgrading to the latest dependencies, edition, `rust-version`, and resolver (retiring duplicate clippy `msrv`) and onto the fleet lint standard, swapping one crate for another (e.g. `chrono` → `jiff`), or applying a refactor or convention fleet-wide — with migration, publishing, and rollout; or reporting upgrade state, crate usage, and change order. |
 | `ui-mockups` | `goddtriffin` | Exploring, comparing, or deciding between UI/UX designs before touching real code — layouts, color sets, copy formats, flows, or page redesigns side by side at real device sizes, over rounds of feedback. |
+| `shakedown-review` | `goddtriffin` | A UI change needs its device review before Todd looks at it: run `shakedown sweep --pack`, then a fresh Sonnet helper reviews the contact sheets and answers in text (at most 30 lines, then a verdict). |
 | `grill-me` | `mattpocock` | Stress-testing a plan or design by being interviewed until every branch of the decision tree is resolved. |
 
 ## Working in this repo

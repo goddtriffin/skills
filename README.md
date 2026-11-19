@@ -29,6 +29,7 @@ Skills written by Todd Griffin.
 | `mock-design`      | Writing, reviewing, or refactoring a reusable mock implementation of a dependency-injected interface/trait, or deciding how a mock seeds responses, records calls, and verifies seeded responses were consumed. Language-agnostic rules with per-language mechanics. |
 | `migrate-rust-repos` | Changing one Rust repo, or a directory of them, repo by repo in dependency order — upgrading to the latest dependencies, edition, `rust-version`, and resolver (retiring duplicate clippy `msrv`), swapping one crate for another (e.g. `chrono` → `jiff`), or applying a refactor or convention fleet-wide — with migration, publishing, and rollout; or reporting upgrade state, crate usage, and change order. |
 | `ui-mockups` | Exploring, comparing, or deciding between UI/UX designs before touching real code — layouts, color sets, copy formats, flows, or page redesigns side by side at real device sizes, over rounds of feedback. Self-contained HTML per round, checked by browser JS. |
+| `shakedown-review` | A UI change needs its device review before Todd looks at it: run `shakedown sweep --pack`, then a fresh Sonnet helper reviews the contact sheets (every device, light and dark) and answers in text. Images never reach the main context. |
 
 ## Plugin: `mattpocock`
 
