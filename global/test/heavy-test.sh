@@ -19,13 +19,13 @@ echo "System-wide memory free percentage: 60%"
 S
 cat > "$T/bin/sysctl" <<'S'
 #!/bin/sh
-case "$2" in hw.ncpu) echo 16 ;; vm.loadavg) [ "$(cat "$STUB/load")" = none ] || echo "{ $(cat "$STUB/load") 1.0 1.0 }" ;; esac
+case "$2" in hw.ncpu) echo 16 ;; vm.loadavg) [ "$(cat "$STUB/load")" = none ] || echo "{ $(cat "$STUB/load") $(cat "$STUB/load5") 1.0 }" ;; esac
 S
 chmod +x "$T/bin/"*
 export STUB=$T PATH="$T/bin:$PATH"
 newenv() { # fresh state per test
   d=$T/$1; mkdir -p "$d"; export HEAVY_DIR=$d/jobs HEAVY_ADMIT=$d/admit HEAVY_STAMP=$d/stamp HEAVY_RAMP=0 HEAVY_CONFIRM=1
-  echo 10 > "$T/cpu"; echo 5 > "$T/load"; : > "$T/cpu_seq"; unset HEAVY_HELD HEAVY_MAX_LOAD
+  echo 10 > "$T/cpu"; echo 5 > "$T/load"; echo 5 > "$T/load5"; : > "$T/cpu_seq"; unset HEAVY_HELD HEAVY_MAX_LOAD HEAVY_MAX_LOAD5
 }
 ok() { if [ "$2" = 1 ]; then pass=$((pass+1)); echo "ok   $1"; else failn=$((failn+1)); echo "FAIL $1"; fi; }
 
@@ -63,6 +63,16 @@ newenv h  # exit code passthrough and registry cleanup
 bash "$heavy" sh -c 'exit 7'; r=$?; [ "$r" = 7 ] && [ -z "$(ls "$HEAVY_DIR")" ]; ok "exit code and cleanup" $(( $? == 0 ))
 
 newenv i  # nested call passes through
-out=$(bash "$heavy" bash "$heavy" echo nested 2>&1); [ "$out" = nested ]; ok "nested call passes through" $(( $? == 0 ))
+HEAVY_RAMP=60; out=$(timeout 8 bash "$heavy" bash "$heavy" echo nested 2>&1); [ "$out" = nested ]; ok "nested call passes through" $(( $? == 0 ))
+
+newenv j  # 5-minute load limit is 2 x cores
+echo 31 > "$T/load5"; out=$(bash "$heavy" echo a 2>&1); [ "$out" = a ]; r1=$?
+echo 33 > "$T/load5"; out=$(timeout 8 bash "$heavy" echo b 2>&1); case "$out" in *"load5 33 >= 32"*) r2=0 ;; *) r2=1 ;; esac
+ok "load5 limit is 2 x cores" $(( r1 == 0 && r2 == 0 ))
+
+newenv k  # stale mutex with a live (stopped) holder older than 120 s is reaped
+mkdir "$HEAVY_ADMIT"; sleep 60 & lp=$!; echo $lp > "$HEAVY_ADMIT/pid"; touch -t 202001010000 "$HEAVY_ADMIT"
+out=$(timeout 30 bash "$heavy" echo reaped 2>&1); kill $lp 2>/dev/null; wait $lp 2>/dev/null
+case "$out" in *reaped) ok "old mutex with live holder reaped" 1 ;; *) echo "$out"; ok "old mutex with live holder reaped" 0 ;; esac
 
 echo "passed $pass, failed $failn"; [ "$failn" = 0 ]

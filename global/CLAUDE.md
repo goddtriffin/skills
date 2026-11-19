@@ -20,9 +20,9 @@ All sessions share one laptop. On 2026-11-19 it hit load 120 on 16 cores and Doc
 - `heavy` fills the machine to about 90% CPU and RAM. There is no cap on the number of jobs; admission depends on
   resources only. A job starts only when CPU, RAM and the 1-minute load (under 2x the number of cores; macOS load
   reads high at moderate CPU) pass twice in a row, 10 s apart (`HEAVY_CONFIRM`), so a build that briefly dips to one
-  thread does not fool it. Admissions are 20 s apart (`HEAVY_RAMP`). Otherwise it waits.
+  thread does not fool it. The 5-minute load must also be under 2x the number of cores (`HEAVY_MAX_LOAD5`). Admissions are 20 s apart (`HEAVY_RAMP`). Otherwise it waits.
 - Never wrap long-running servers (`make dev`, dev servers, watchers) in `heavy`; only finite builds, tests and lint.
-- `heavy --status` lists the running jobs and the current CPU, memory and load.
+- `heavy --status` lists the running jobs and the current CPU, memory, load and 5-minute load.
 - For heavy work it cannot wrap (an Xcode GUI build), check `uptime` first and wait while the load is above
   twice the number of cores.
 - Quit idle simulators, browsers and dev servers you started.

@@ -4,7 +4,7 @@
 # Fills the machine up to HEAVY_MAX_CPU % CPU (default 90) and HEAVY_MAX_MEM % RAM (default 90), and keeps the
 # 1-minute load below HEAVY_MAX_LOAD (default: 2 x number of CPUs). The load check is the crash guard: CPU % saturates
 # at 100 while load keeps climbing (macOS load reads high even at moderate CPU, hence 2x). There is no cap on the
-# number of jobs. HEAVY_RAMP seconds (default 20) must pass between admissions so the last job shows up in the
+# number of jobs. The 5-minute load must also stay below HEAVY_MAX_LOAD5 (default: 2 x number of CPUs). HEAVY_RAMP seconds (default 20) must pass between admissions so the last job shows up in the
 # measurements. The resource checks must pass twice in a row, HEAVY_CONFIRM seconds (default 10) apart, so a running
 # build that briefly dips to one thread does not fool them. Only finite builds, tests and lint belong here, never servers or watchers.
 # Admission is checked under a short mutex (a mkdir); the command itself runs outside it, registered in HEAVY_DIR.
@@ -36,6 +36,14 @@ load1() {
   if [ -r /proc/loadavg ]; then l=$(awk '{print int($1)}' /proc/loadavg)
   else l=$(sysctl -n vm.loadavg 2>/dev/null | awk '{print int($2)}'); fi
   isint "$l" || fail "cannot read the load average"
+  echo "$l"
+}
+
+load5() {
+  local l
+  if [ -r /proc/loadavg ]; then l=$(awk '{print int($2)}' /proc/loadavg)
+  else l=$(sysctl -n vm.loadavg 2>/dev/null | awk '{print int($3)}'); fi
+  isint "$l" || fail "cannot read the 5-minute load average"
   echo "$l"
 }
 
@@ -80,7 +88,7 @@ status() {
     echo "pid $p  age $(age "$f")s  $cwd  $line"; n=$((n + 1))
   done
   echo "running: $n"
-  echo "cpu $(cpu_busy)% (max $max_cpu)  mem $(mem_used)% (max $max_mem)  load $(load1) (max ${HEAVY_MAX_LOAD:-$(( $(ncpu) * 2 ))})"
+  echo "cpu $(cpu_busy)% (max $max_cpu)  mem $(mem_used)% (max $max_mem)  load $(load1) (max ${HEAVY_MAX_LOAD:-$(( $(ncpu) * 2 ))})  load5 $(load5) (max ${HEAVY_MAX_LOAD5:-$(( $(ncpu) * 2 ))})"
 }
 
 case "${1:-}" in
@@ -92,7 +100,8 @@ esac
 if [ -n "${HEAVY_HELD:-}" ] && [ -f "$dir/$HEAVY_HELD" ] && alive "$HEAVY_HELD"; then exec "$@"; fi
 
 load_max=${HEAVY_MAX_LOAD:-$(( $(ncpu) * 2 ))}
-isint "$max_cpu" && isint "$max_mem" && isint "$ramp" && isint "$confirm" && isint "$load_max" || fail "thresholds must be integers"
+load5_max=${HEAVY_MAX_LOAD5:-$(( $(ncpu) * 2 ))}
+isint "$max_cpu" && isint "$max_mem" && isint "$ramp" && isint "$confirm" && isint "$load_max" && isint "$load5_max" || fail "thresholds must be integers"
 mkdir -p "$dir" || fail "cannot create $dir"
 
 holder() { cat "$admit/pid" 2>/dev/null || true; }
@@ -101,6 +110,8 @@ have_admit=0
 cleanup() {
   [ "$have_admit" = 1 ] && [ "$(holder)" = "$$" ] && rm -rf "$admit"
   rm -f "$dir/$$"
+  [ -n "${spid:-}" ] && kill "$spid" 2>/dev/null
+  return 0
 }
 trap cleanup EXIT
 trap 'exit 129' HUP
@@ -113,7 +124,8 @@ reclaim() {
     local h; h=$(holder)
     if [ -d "$admit" ]; then
       if [ -n "$h" ]; then
-        alive "$h" || { [ "$(holder)" = "$h" ] && mv "$admit" "$admit.stale.$$" 2>/dev/null && rm -rf "$admit.stale.$$"; }
+        # dead holder, or held over 120 s (a live pid may be stopped, e.g. Ctrl-Z)
+        if ! alive "$h" || [ "$(age "$admit")" -ge 120 ]; then [ "$(holder)" = "$h" ] && mv "$admit" "$admit.stale.$$" 2>/dev/null && rm -rf "$admit.stale.$$"; fi
       elif [ "$(age "$admit")" -ge 10 ] && [ -z "$(holder)" ]; then
         # taken 10 s ago and never got a pid: its taker died
         mv "$admit" "$admit.stale.$$" 2>/dev/null && rm -rf "$admit.stale.$$"
@@ -128,13 +140,15 @@ reclaim() {
 
 # One resource sample. Sets $reason and returns 1 when the machine is too busy.
 sample() {
-  local c m l
+  local c m l l5
   c=$(cpu_busy) || exit 3
   [ "$c" -lt "$max_cpu" ] || { reason="cpu ${c}% >= ${max_cpu}%"; return 1; }
   m=$(mem_used) || exit 3
   [ "$m" -lt "$max_mem" ] || { reason="memory ${m}% >= ${max_mem}%"; return 1; }
   l=$(load1) || exit 3
   [ "$l" -lt "$load_max" ] || { reason="load ${l} >= ${load_max}"; return 1; }
+  l5=$(load5) || exit 3
+  [ "$l5" -lt "$load5_max" ] || { reason="load5 ${l5} >= ${load5_max}"; return 1; }
   return 0
 }
 
@@ -151,7 +165,7 @@ check() {
     return 1
   fi
   sample || return 1
-  sleep "$confirm"   # the mutex stays held, so no other admission slips in between the samples
+  sleep "$confirm" & spid=$!; wait $spid; spid=   # TERM interrupts wait at once; the mutex stays held, so no other admission slips in between the samples
   sample || { reason="$reason (second sample)"; return 1; }
   return 0
 }
