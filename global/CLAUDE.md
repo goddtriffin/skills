@@ -53,9 +53,9 @@ gated, and look for immersive friend features (like friends' best heights drawn 
 ## UI: review on every device
 
 Check every UI change on desktop, phone portrait, phone landscape and tablet, light and dark: no
-overlapping text, nothing off screen, no sideways scroll, not too busy. Use `goddtriffin/infra`
-`scripts/devices/`; a Sonnet helper reviews the screenshots and reports in text. Fix findings before
-Todd reviews.
+overlapping text, nothing off screen, no sideways scroll, not too busy. Run `shakedown sweep --pack`
+and follow the `shakedown-review` skill; `shakedown devices serve` is the interactive view. A Sonnet
+helper reviews the pack and reports in text. Fix findings before Todd reviews.
 
 ## Claude Code: the main agent coordinates, Sonnet helpers do the work
 
