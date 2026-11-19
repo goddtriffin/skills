@@ -17,8 +17,8 @@ All sessions share one laptop. On 2026-11-19 it hit load 120 on 16 cores and Doc
   `heavy cargo test`, `heavy make test`, `heavy xcodebuild ...`. Heavy means cargo build, test or clippy,
   xcodebuild, gradle, Playwright or UI checks, docker build, benches.
   Install: `ln -sf ~/Documents/code/skills/global/bin/heavy ~/.local/bin/heavy`.
-- `heavy` fills the machine to about 90% CPU and RAM and keeps the 1-minute load at or under the number of cores.
-  It starts jobs a few at a time (20 s apart) and waits while any limit is hit.
+- `heavy` fills the machine to about 90% CPU and RAM. It admits a job only while the 1-minute load is under the
+  number of cores and fewer than 3 jobs run, starting them 20 s apart, and waits while any limit is hit.
 - Never wrap long-running servers (`make dev`, dev servers, watchers) in `heavy`; only finite builds, tests and lint.
 - `heavy --status` lists the running jobs and the current CPU, memory and load.
 - For heavy work it cannot wrap (an Xcode GUI build), check `uptime` first and wait while the load is above

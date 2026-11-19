@@ -15,6 +15,7 @@ reap=$admit.reap
 max_cpu=${HEAVY_MAX_CPU:-90}
 max_mem=${HEAVY_MAX_MEM:-90}
 ramp=${HEAVY_RAMP:-20}
+max_jobs=${HEAVY_MAX_JOBS:-3}
 
 fail() { echo "heavy: $*" >&2; exit 3; }
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
@@ -41,8 +42,8 @@ cpu_busy() {
   local b
   if [ -r /proc/stat ]; then
     local a1 a2
-    a1=$(awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8, $5+$6}' /proc/stat); sleep 1
-    a2=$(awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8, $5+$6}' /proc/stat)
+    a1=$(awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8+$9, $5+$6}' /proc/stat); sleep 1
+    a2=$(awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8+$9, $5+$6}' /proc/stat)
     b=$(echo "$a1 $a2" | awk '{t=$3-$1; i=$4-$2; if (t>0) print int(100-(i*100)/t+0.99); else print "x"}')
   else
     # second sample of top is the live one; round busy up
@@ -63,6 +64,18 @@ mem_used() {
   fi
   isint "$u" || fail "cannot read memory usage"
   echo "$u"
+}
+
+# Number of live registered jobs; entries of dead pids are removed.
+live_jobs() {
+  local f p n=0
+  for f in "$dir"/*; do
+    [ -f "$f" ] || continue
+    p=${f##*/}
+    isint "$p" || continue
+    if alive "$p"; then n=$((n + 1)); else rm -f "$f"; fi
+  done
+  echo "$n"
 }
 
 # Drop registrations of dead pids, then print the rest as "pid age cwd command".
@@ -89,7 +102,7 @@ esac
 if [ -n "${HEAVY_HELD:-}" ] && [ -f "$dir/$HEAVY_HELD" ] && alive "$HEAVY_HELD"; then exec "$@"; fi
 
 load_max=${HEAVY_MAX_LOAD:-$(ncpu)}
-isint "$max_cpu" && isint "$max_mem" && isint "$ramp" && isint "$load_max" || fail "thresholds must be integers"
+isint "$max_cpu" && isint "$max_mem" && isint "$ramp" && isint "$max_jobs" && isint "$load_max" || fail "thresholds must be integers"
 mkdir -p "$dir" || fail "cannot create $dir"
 
 holder() { cat "$admit/pid" 2>/dev/null || true; }
@@ -110,22 +123,31 @@ reclaim() {
     local h; h=$(holder)
     if [ -d "$admit" ]; then
       if [ -n "$h" ]; then
-        alive "$h" || { [ "$(holder)" = "$h" ] && rm -rf "$admit"; }
+        alive "$h" || { [ "$(holder)" = "$h" ] && mv "$admit" "$admit.stale.$$" 2>/dev/null && rm -rf "$admit.stale.$$"; }
       elif [ "$(age "$admit")" -ge 10 ] && [ -z "$(holder)" ]; then
-        rm -rf "$admit"   # taken 10 s ago and never got a pid: its taker died
+        # taken 10 s ago and never got a pid: its taker died
+        mv "$admit" "$admit.stale.$$" 2>/dev/null && rm -rf "$admit.stale.$$"
       fi
     fi
     rm -rf "$reap"
   elif [ "$(age "$reap")" -ge 30 ]; then
-    rm -rf "$reap"   # a reaper died mid-reclaim
+    # a reaper died mid-reclaim: rename atomically, only the one whose mv succeeds removes it
+    mv "$reap" "$reap.stale.$$" 2>/dev/null && rm -rf "$reap.stale.$$"
   fi
 }
 
 # Sets $reason and returns 1 when the machine is too busy.
 check() {
-  local c m l last
+  local c m l j last
+  nap=5
   last=0; [ -f "$stamp" ] && last=$(cat "$stamp" 2>/dev/null); isint "$last" || last=0
-  if [ $(( $(now) - last )) -lt "$ramp" ]; then reason="ramp spacing (under ${ramp}s since last start)"; return 1; fi
+  if [ $(( $(now) - last )) -lt "$ramp" ]; then
+    reason="ramp spacing (under ${ramp}s since last start)"
+    nap=$(( ramp - ($(now) - last) )); [ "$nap" -gt 5 ] && nap=5; [ "$nap" -lt 1 ] && nap=1
+    return 1
+  fi
+  j=$(live_jobs)
+  [ "$j" -lt "$max_jobs" ] || { reason="jobs ${j} >= ${max_jobs}"; return 1; }
   c=$(cpu_busy) || exit 3
   [ "$c" -lt "$max_cpu" ] || { reason="cpu ${c}% >= ${max_cpu}%"; return 1; }
   m=$(mem_used) || exit 3
@@ -149,12 +171,12 @@ while :; do
     fi
     rm -rf "$admit"; have_admit=0
   else
-    reason="admission busy"
+    reason="admission busy"; nap=5
     reclaim
   fi
   key=${reason%% [0-9]*}
   [ "$said" = "$key" ] || { echo "heavy: waiting ($reason)" >&2; said=$key; }
-  sleep 5   # retry on a busy shared resource, not polling for data
+  sleep "${nap:-5}"   # retry on a busy shared resource, not polling for data
 done
 
 HEAVY_HELD=$$ "$@"
