@@ -10,17 +10,19 @@ Several Claude sessions work in the same checkouts and Docker at once. Touch onl
   Never touch another session's worktree.
 - Never delete a branch without a merged PR whose head matches it. If unsure, leave it and tell Todd.
 
-### One heavy job per machine (Todd, 2026-11-19)
+### Heavy jobs share the machine (Todd, 2026-11-19)
 
 All sessions share one laptop. On 2026-11-19 it hit load 120 on 16 cores and Docker and background jobs died.
 - Run every heavy command through `heavy` (on PATH from `~/.local/bin`, source `global/bin/heavy` here):
   `heavy cargo test`, `heavy make test`, `heavy xcodebuild ...`. Heavy means cargo build, test or clippy,
-  xcodebuild, gradle, Playwright or UI checks, docker build, benches. It waits for the machine-wide lock
-  `/tmp/heavy.lock` (a dead holder's lock is stale and removed) and for the load to drop, then always releases.
+  xcodebuild, gradle, Playwright or UI checks, docker build, benches.
   Install: `ln -sf ~/Documents/code/skills/global/bin/heavy ~/.local/bin/heavy`.
-- One heavy job at a time per machine. Never fan out parallel builds or tests.
-- `heavy` also waits while the 1-minute load is 16 or more. For heavy work it cannot wrap (an Xcode GUI build),
-  check `uptime` first and wait while the load is above about 16.
+- `heavy` fills the machine to about 90% CPU and RAM. It admits a job only while the 1-minute load is under the
+  number of cores and fewer than 3 jobs run, starting them 20 s apart, and waits while any limit is hit.
+- Never wrap long-running servers (`make dev`, dev servers, watchers) in `heavy`; only finite builds, tests and lint.
+- `heavy --status` lists the running jobs and the current CPU, memory and load.
+- For heavy work it cannot wrap (an Xcode GUI build), check `uptime` first and wait while the load is above
+  the number of cores.
 - Quit idle simulators, browsers and dev servers you started.
 
 ## Disk space
