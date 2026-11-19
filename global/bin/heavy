@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# heavy: run one heavy command at a time per machine (Todd, 2026-11-19).
+# Usage: heavy <command> [args...]
+# Waits for /tmp/heavy.lock (stale if its pid is dead) and for the 1-minute load to drop below
+# HEAVY_MAX_LOAD (default 16), runs the command, and always releases the lock.
+set -u
+lock=/tmp/heavy.lock
+max_load=${HEAVY_MAX_LOAD:-16}
+[ $# -gt 0 ] || { echo "usage: heavy <command> [args...]" >&2; exit 2; }
+# Nested call (a heavy Makefile target run under heavy): the lock is already ours.
+[ -n "${HEAVY_HELD:-}" ] && exec "$@"
+
+load1() { sysctl -n vm.loadavg 2>/dev/null | awk '{print int($2)}' || awk '{print int($1)}' /proc/loadavg; }
+
+said=0
+while :; do
+  if mkdir "$lock" 2>/dev/null; then
+    echo $$ > "$lock/pid"
+    if [ "$(load1)" -lt "$max_load" ]; then break; fi
+    rm -rf "$lock"
+    reason="load $(load1) >= $max_load"
+  else
+    holder=$(cat "$lock/pid" 2>/dev/null || true)
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
+      rm -rf "$lock"; continue   # stale: holder is dead
+    fi
+    reason="lock held by pid ${holder:-?}"
+  fi
+  [ $said = 1 ] || { echo "heavy: waiting ($reason)" >&2; said=1; }
+  sleep 5   # retry on a held resource, not polling for data
+done
+
+trap 'rm -rf "$lock"' EXIT
+trap 'exit 130' INT TERM
+HEAVY_HELD=$$ "$@"
