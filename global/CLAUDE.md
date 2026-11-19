@@ -32,6 +32,14 @@ The disk runs low; build artifacts are the usual cause. Check `df -h .`; above ~
   Never `docker system prune -a --volumes`. Stop Docker with `docker desktop stop`.
 - If the disk is still too full, tell Todd.
 
+## No polling
+
+No polling anywhere, in any project. React to events: webhooks, pub/sub, push notifications, Postgres
+LISTEN/NOTIFY, server-sent events or websockets.
+- Not polling: a retry after a failure (with backoff), a scheduled job that expires or cleans up data.
+- Monitoring is exempt: metrics scrapes, healthchecks, uptime checks.
+- If a client would poll a service, give the service a push channel (webhook event or stream) instead.
+
 ## Git and pull requests
 
 - After a PR merges: check out the default branch, `git pull --ff-only`, delete the merged branch
