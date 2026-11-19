@@ -2,9 +2,11 @@
 # heavy: admission control for heavy commands (Todd, 2026-11-19).
 # Usage: heavy <command> [args...]   |   heavy --status
 # Fills the machine up to HEAVY_MAX_CPU % CPU (default 90) and HEAVY_MAX_MEM % RAM (default 90), and keeps the
-# 1-minute load below HEAVY_MAX_LOAD (default: number of CPUs). The load check is the crash guard: CPU % saturates at
-# 100 while load keeps climbing. HEAVY_RAMP seconds (default 20) must pass between admissions so the last job
-# shows up in the measurements. Only finite builds, tests and lint belong here, never servers or watchers.
+# 1-minute load below HEAVY_MAX_LOAD (default: 2 x number of CPUs). The load check is the crash guard: CPU % saturates
+# at 100 while load keeps climbing (macOS load reads high even at moderate CPU, hence 2x). There is no cap on the
+# number of jobs. HEAVY_RAMP seconds (default 20) must pass between admissions so the last job shows up in the
+# measurements. The resource checks must pass twice in a row, HEAVY_CONFIRM seconds (default 10) apart, so a running
+# build that briefly dips to one thread does not fool them. Only finite builds, tests and lint belong here, never servers or watchers.
 # Admission is checked under a short mutex (a mkdir); the command itself runs outside it, registered in HEAVY_DIR.
 # A metric that cannot be read is an error (exit 3). Integer math only (macOS bash 3.2).
 set -u
@@ -15,7 +17,7 @@ reap=$admit.reap
 max_cpu=${HEAVY_MAX_CPU:-90}
 max_mem=${HEAVY_MAX_MEM:-90}
 ramp=${HEAVY_RAMP:-20}
-max_jobs=${HEAVY_MAX_JOBS:-3}
+confirm=${HEAVY_CONFIRM:-10}
 
 fail() { echo "heavy: $*" >&2; exit 3; }
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
@@ -66,18 +68,6 @@ mem_used() {
   echo "$u"
 }
 
-# Number of live registered jobs; entries of dead pids are removed.
-live_jobs() {
-  local f p n=0
-  for f in "$dir"/*; do
-    [ -f "$f" ] || continue
-    p=${f##*/}
-    isint "$p" || continue
-    if alive "$p"; then n=$((n + 1)); else rm -f "$f"; fi
-  done
-  echo "$n"
-}
-
 # Drop registrations of dead pids, then print the rest as "pid age cwd command".
 status() {
   local f p n=0 line cwd
@@ -90,7 +80,7 @@ status() {
     echo "pid $p  age $(age "$f")s  $cwd  $line"; n=$((n + 1))
   done
   echo "running: $n"
-  echo "cpu $(cpu_busy)% (max $max_cpu)  mem $(mem_used)% (max $max_mem)  load $(load1) (max ${HEAVY_MAX_LOAD:-$(ncpu)})"
+  echo "cpu $(cpu_busy)% (max $max_cpu)  mem $(mem_used)% (max $max_mem)  load $(load1) (max ${HEAVY_MAX_LOAD:-$(( $(ncpu) * 2 ))})"
 }
 
 case "${1:-}" in
@@ -101,8 +91,8 @@ esac
 # Nested call (a heavy Makefile target run under heavy): pass through if the holder is a live registered job.
 if [ -n "${HEAVY_HELD:-}" ] && [ -f "$dir/$HEAVY_HELD" ] && alive "$HEAVY_HELD"; then exec "$@"; fi
 
-load_max=${HEAVY_MAX_LOAD:-$(ncpu)}
-isint "$max_cpu" && isint "$max_mem" && isint "$ramp" && isint "$max_jobs" && isint "$load_max" || fail "thresholds must be integers"
+load_max=${HEAVY_MAX_LOAD:-$(( $(ncpu) * 2 ))}
+isint "$max_cpu" && isint "$max_mem" && isint "$ramp" && isint "$confirm" && isint "$load_max" || fail "thresholds must be integers"
 mkdir -p "$dir" || fail "cannot create $dir"
 
 holder() { cat "$admit/pid" 2>/dev/null || true; }
@@ -136,24 +126,33 @@ reclaim() {
   fi
 }
 
-# Sets $reason and returns 1 when the machine is too busy.
-check() {
-  local c m l j last
-  nap=5
-  last=0; [ -f "$stamp" ] && last=$(cat "$stamp" 2>/dev/null); isint "$last" || last=0
-  if [ $(( $(now) - last )) -lt "$ramp" ]; then
-    reason="ramp spacing (under ${ramp}s since last start)"
-    nap=$(( ramp - ($(now) - last) )); [ "$nap" -gt 5 ] && nap=5; [ "$nap" -lt 1 ] && nap=1
-    return 1
-  fi
-  j=$(live_jobs)
-  [ "$j" -lt "$max_jobs" ] || { reason="jobs ${j} >= ${max_jobs}"; return 1; }
+# One resource sample. Sets $reason and returns 1 when the machine is too busy.
+sample() {
+  local c m l
   c=$(cpu_busy) || exit 3
   [ "$c" -lt "$max_cpu" ] || { reason="cpu ${c}% >= ${max_cpu}%"; return 1; }
   m=$(mem_used) || exit 3
   [ "$m" -lt "$max_mem" ] || { reason="memory ${m}% >= ${max_mem}%"; return 1; }
   l=$(load1) || exit 3
   [ "$l" -lt "$load_max" ] || { reason="load ${l} >= ${load_max}"; return 1; }
+  return 0
+}
+
+# Called holding the admit mutex. Sets $reason and returns 1 when the machine is too busy: ramp spacing, then two
+# passing samples $confirm seconds apart.
+check() {
+  local last t
+  nap=5
+  last=0; [ -f "$stamp" ] && last=$(cat "$stamp" 2>/dev/null); isint "$last" || last=0
+  t=$(now); [ "$last" -gt "$t" ] && last=0   # a stamp from the future (clock change) counts as none
+  if [ $(( t - last )) -lt "$ramp" ]; then
+    reason="ramp spacing (under ${ramp}s since last start)"
+    nap=$(( ramp - (t - last) )); [ "$nap" -gt 5 ] && nap=5; [ "$nap" -lt 1 ] && nap=1
+    return 1
+  fi
+  sample || return 1
+  sleep "$confirm"   # the mutex stays held, so no other admission slips in between the samples
+  sample || { reason="$reason (second sample)"; return 1; }
   return 0
 }
 
