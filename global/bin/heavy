@@ -1,41 +1,118 @@
 #!/usr/bin/env bash
-# heavy: run one heavy command at a time per machine (Todd, 2026-11-19).
-# Usage: heavy <command> [args...]
-# Waits until the 1-minute load is below HEAVY_MAX_LOAD (default 16, compared as an integer) and
-# /tmp/heavy.lock is free, takes the lock, runs the command, and releases the lock when it exits.
-# A lock whose holder is dead (or that never got a pid within 10 s) is stale and is reclaimed.
+# heavy: admission control for heavy commands (Todd, 2026-11-19).
+# Usage: heavy <command> [args...]   |   heavy --status
+# Fills the machine up to HEAVY_MAX_CPU % CPU (default 90) and HEAVY_MAX_MEM % RAM (default 90), and keeps the
+# 1-minute load below HEAVY_MAX_LOAD (default: number of CPUs). The load check is the crash guard: CPU % saturates at
+# 100 while load keeps climbing. HEAVY_RAMP seconds (default 20) must pass between admissions so the last job
+# shows up in the measurements. Only finite builds, tests and lint belong here, never servers or watchers.
+# Admission is checked under a short mutex (a mkdir); the command itself runs outside it, registered in HEAVY_DIR.
+# A metric that cannot be read is an error (exit 3). Integer math only (macOS bash 3.2).
 set -u
-lock=${HEAVY_LOCK:-/tmp/heavy.lock}   # override only for tests
-reap=$lock.reap
-max_load=${HEAVY_MAX_LOAD:-16}
-[ $# -gt 0 ] || { echo "usage: heavy <command> [args...]" >&2; exit 2; }
+dir=${HEAVY_DIR:-/tmp/heavy.d}          # job registry; overrides here and below are for tests only
+admit=${HEAVY_ADMIT:-/tmp/heavy.admit}  # admission mutex
+stamp=${HEAVY_STAMP:-/tmp/heavy.last}   # time of the last admission
+reap=$admit.reap
+max_cpu=${HEAVY_MAX_CPU:-90}
+max_mem=${HEAVY_MAX_MEM:-90}
+ramp=${HEAVY_RAMP:-20}
 
-holder() { cat "$lock/pid" 2>/dev/null || true; }
+fail() { echo "heavy: $*" >&2; exit 3; }
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
-age() { echo $(( $(date +%s) - $(stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || date +%s) )); }
+now() { date +%s; }
+age() { echo $(( $(now) - $(stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || now) )); }
+isint() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
-# Nested call (a heavy Makefile target run under heavy): pass through only if our ancestor holds the lock now.
-if [ -n "${HEAVY_HELD:-}" ] && [ "$(holder)" = "$HEAVY_HELD" ] && alive "$HEAVY_HELD"; then exec "$@"; fi
+ncpu() {
+  local n; n=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null)
+  isint "$n" && [ "$n" -gt 0 ] || fail "cannot read the number of CPUs"
+  echo "$n"
+}
 
 load1() {
   local l
   if [ -r /proc/loadavg ]; then l=$(awk '{print int($1)}' /proc/loadavg)
   else l=$(sysctl -n vm.loadavg 2>/dev/null | awk '{print int($2)}'); fi
-  case "$l" in ''|*[!0-9]*) echo "heavy: cannot read the load average" >&2; exit 3 ;; esac
+  isint "$l" || fail "cannot read the load average"
   echo "$l"
 }
 
-# Reclaim a stale lock. The reap mutex makes the check-and-remove atomic, so two waiters that both saw
-# the same dead holder cannot delete a lock a third process has just taken.
+# CPU busy %, sampled over about a second.
+cpu_busy() {
+  local b
+  if [ -r /proc/stat ]; then
+    local a1 a2
+    a1=$(awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8, $5+$6}' /proc/stat); sleep 1
+    a2=$(awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8, $5+$6}' /proc/stat)
+    b=$(echo "$a1 $a2" | awk '{t=$3-$1; i=$4-$2; if (t>0) print int(100-(i*100)/t+0.99); else print "x"}')
+  else
+    # second sample of top is the live one; round busy up
+    b=$(top -l 2 -n 0 -s 1 2>/dev/null | awk '/^CPU usage:/{l=$0} END{ if (match(l,/[0-9.]+% idle/)) { s=substr(l,RSTART,RLENGTH); sub(/%.*/,"",s); print int(100-s+0.99) } }')
+  fi
+  isint "$b" || fail "cannot read CPU usage"
+  [ "$b" -gt 100 ] && b=100
+  echo "$b"
+}
+
+# Memory used %.
+mem_used() {
+  local u
+  if [ -r /proc/meminfo ]; then
+    u=$(awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{ if (t>0 && a!="") print int(100-(a*100)/t+0.99) }' /proc/meminfo)
+  else
+    u=$(memory_pressure 2>/dev/null | awk '/System-wide memory free percentage:/{f=$NF; sub(/%/,"",f); print int(100-f)}')
+  fi
+  isint "$u" || fail "cannot read memory usage"
+  echo "$u"
+}
+
+# Drop registrations of dead pids, then print the rest as "pid age cwd command".
+status() {
+  local f p n=0 line cwd
+  for f in "$dir"/*; do
+    [ -f "$f" ] || continue
+    p=${f##*/}
+    isint "$p" || continue
+    if ! alive "$p"; then rm -f "$f"; continue; fi
+    line=$(sed -n 1p "$f"); cwd=$(sed -n 2p "$f")
+    echo "pid $p  age $(age "$f")s  $cwd  $line"; n=$((n + 1))
+  done
+  echo "running: $n"
+  echo "cpu $(cpu_busy)% (max $max_cpu)  mem $(mem_used)% (max $max_mem)  load $(load1) (max ${HEAVY_MAX_LOAD:-$(ncpu)})"
+}
+
+case "${1:-}" in
+  --status) status; exit 0 ;;
+  ''|-h|--help) echo "usage: heavy <command> [args...] | heavy --status" >&2; exit 2 ;;
+esac
+
+# Nested call (a heavy Makefile target run under heavy): pass through if the holder is a live registered job.
+if [ -n "${HEAVY_HELD:-}" ] && [ -f "$dir/$HEAVY_HELD" ] && alive "$HEAVY_HELD"; then exec "$@"; fi
+
+load_max=${HEAVY_MAX_LOAD:-$(ncpu)}
+isint "$max_cpu" && isint "$max_mem" && isint "$ramp" && isint "$load_max" || fail "thresholds must be integers"
+mkdir -p "$dir" || fail "cannot create $dir"
+
+holder() { cat "$admit/pid" 2>/dev/null || true; }
+have_admit=0
+
+cleanup() {
+  [ "$have_admit" = 1 ] && [ "$(holder)" = "$$" ] && rm -rf "$admit"
+  rm -f "$dir/$$"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# Reclaim a stale admission mutex. The reap mutex makes check-and-remove atomic.
 reclaim() {
   if mkdir "$reap" 2>/dev/null; then
     local h; h=$(holder)
-    if [ -d "$lock" ]; then
+    if [ -d "$admit" ]; then
       if [ -n "$h" ]; then
-        # A dead holder cannot change the lock, and only a reaper (one at a time) removes it.
-        alive "$h" || { [ "$(holder)" = "$h" ] && rm -rf "$lock"; }
-      elif [ "$(age "$lock")" -ge 10 ] && [ -z "$(holder)" ]; then
-        rm -rf "$lock"   # taken over 10 s ago and never got a pid: its taker died
+        alive "$h" || { [ "$(holder)" = "$h" ] && rm -rf "$admit"; }
+      elif [ "$(age "$admit")" -ge 10 ] && [ -z "$(holder)" ]; then
+        rm -rf "$admit"   # taken 10 s ago and never got a pid: its taker died
       fi
     fi
     rm -rf "$reap"
@@ -44,25 +121,40 @@ reclaim() {
   fi
 }
 
+# Sets $reason and returns 1 when the machine is too busy.
+check() {
+  local c m l last
+  last=0; [ -f "$stamp" ] && last=$(cat "$stamp" 2>/dev/null); isint "$last" || last=0
+  if [ $(( $(now) - last )) -lt "$ramp" ]; then reason="ramp spacing (under ${ramp}s since last start)"; return 1; fi
+  c=$(cpu_busy) || exit 3
+  [ "$c" -lt "$max_cpu" ] || { reason="cpu ${c}% >= ${max_cpu}%"; return 1; }
+  m=$(mem_used) || exit 3
+  [ "$m" -lt "$max_mem" ] || { reason="memory ${m}% >= ${max_mem}%"; return 1; }
+  l=$(load1) || exit 3
+  [ "$l" -lt "$load_max" ] || { reason="load ${l} >= ${load_max}"; return 1; }
+  return 0
+}
+
 said=""
 while :; do
-  load=$(load1) || exit 3
-  if [ "$load" -ge "$max_load" ]; then
-    reason="load $load >= $max_load"
-  elif mkdir "$lock" 2>/dev/null; then
-    echo $$ > "$lock/pid" || continue   # lock vanished under us: try again
-    break
+  reason=""
+  if mkdir "$admit" 2>/dev/null; then
+    have_admit=1
+    echo $$ > "$admit/pid" || { have_admit=0; continue; }
+    if check; then
+      now > "$stamp"
+      printf '%s\n%s\n' "$*" "$PWD" > "$dir/$$"
+      rm -rf "$admit"; have_admit=0
+      break
+    fi
+    rm -rf "$admit"; have_admit=0
   else
-    reason="lock held by pid $(holder)"
+    reason="admission busy"
     reclaim
   fi
-  [ "$said" = "$reason" ] || { echo "heavy: waiting ($reason)" >&2; said=$reason; }
+  key=${reason%% [0-9]*}
+  [ "$said" = "$key" ] || { echo "heavy: waiting ($reason)" >&2; said=$key; }
   sleep 5   # retry on a busy shared resource, not polling for data
 done
 
-release() { [ "$(holder)" = "$$" ] && rm -rf "$lock"; }
-trap release EXIT
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
 HEAVY_HELD=$$ "$@"
