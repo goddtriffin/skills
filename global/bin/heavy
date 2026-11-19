@@ -12,7 +12,7 @@ max_load=${HEAVY_MAX_LOAD:-16}
 
 holder() { cat "$lock/pid" 2>/dev/null || true; }
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
-age() { echo $(( $(date +%s) - $(stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || date +%s) )); }
+age() { echo $(( $(date +%s) - $(stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || date +%s) )); }
 
 # Nested call (a heavy Makefile target run under heavy): pass through only if our ancestor holds the lock now.
 if [ -n "${HEAVY_HELD:-}" ] && [ "$(holder)" = "$HEAVY_HELD" ] && alive "$HEAVY_HELD"; then exec "$@"; fi
@@ -30,7 +30,7 @@ load1() {
 reclaim() {
   if mkdir "$reap" 2>/dev/null; then
     local h; h=$(holder)
-    if [ -d "$lock" ] && { alive "$h" || { [ -z "$h" ] && [ "$(age "$lock")" -lt 10 ]; }; }; then :; else rm -rf "$lock"; fi
+    if [ -d "$lock" ] && { alive "$h" || { [ -z "$h" ] && [ "$(age "$lock")" -lt 10 ]; }; }; then :; elif [ "$(holder)" = "$h" ]; then rm -rf "$lock"; fi
     rm -rf "$reap"
   elif [ "$(age "$reap")" -ge 30 ]; then
     rm -rf "$reap"   # a reaper died mid-reclaim
