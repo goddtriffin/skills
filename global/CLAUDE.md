@@ -13,16 +13,21 @@ Several Claude sessions work in the same checkouts and Docker at once. Touch onl
 ### Heavy jobs share the machine (Todd, 2026-11-19)
 
 All sessions share one laptop. On 2026-11-19 it hit load 120 on 16 cores and Docker and background jobs died.
-- Run every heavy command through `heavy` (on PATH from `~/.local/bin`, source `global/bin/heavy` here):
-  `heavy cargo test`, `heavy make test`, `heavy xcodebuild ...`. Heavy means cargo build, test or clippy,
-  xcodebuild, gradle, Playwright or UI checks, docker build, benches.
-  Install: `ln -sf ~/Documents/code/skills/global/bin/heavy ~/.local/bin/heavy`.
-- `heavy` fills the machine to about 90% CPU and RAM. It admits a job only while the 1-minute load is under the
-  number of cores and fewer than 3 jobs run, starting them 20 s apart, and waits while any limit is hit.
+- Run every heavy command through `heavy` (Rust, crate `toddstack-heavy`): `heavy cargo test`,
+  `heavy make test`, `heavy xcodebuild ...`. Heavy means cargo build, test or clippy, xcodebuild, gradle,
+  Playwright or UI checks, docker build, benches.
 - Never wrap long-running servers (`make dev`, dev servers, watchers) in `heavy`; only finite builds, tests and lint.
-- `heavy --status` lists the running jobs and the current CPU, memory and load.
+- Flags: `heavy [--cpu N] [--mem SIZE] [--vram SIZE] [--disk SIZE] [--timeout DURATION] [--] cmd`. Give `--cpu` and
+  `--mem` when the job needs more than the defaults.
+- `heavy status` shows running jobs and current CPU, memory and load.
+- It admits a job on live CPU headroom and memory reservations, with no job cap, and waits while 1-minute or
+  5-minute load is over 2x the number of cores. During its 10 s ramp a job holds its peak cores, which staggers
+  bursts. Each run prints stats. Details: the crate README (`toddstack/rust/toddstack_heavy`).
+- Install: `cargo install --locked --root ~/.local/share/heavy-rs toddstack-heavy@0.1.0`, then
+  `ln -sfn ~/.local/share/heavy-rs/bin/heavy ~/.local/bin/heavy`.
+- Heavy fixes go only into the Rust crate; the old bash `heavy` is retired.
 - For heavy work it cannot wrap (an Xcode GUI build), check `uptime` first and wait while the load is above
-  the number of cores.
+  twice the number of cores.
 - Quit idle simulators, browsers and dev servers you started.
 
 ## Disk space
