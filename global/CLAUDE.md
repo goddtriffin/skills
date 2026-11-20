@@ -24,7 +24,7 @@ All sessions share one laptop. On 2026-11-19 it hit load 120 on 16 cores and Doc
 - It admits a job while CPU is under about 94% and memory is free, with no job cap. Load1 over 2x cores blocks only
   if CPU is at least 90% or load is rising (load1 > 1.1x load5); 4x cores always blocks; memory pressure blocks.
   Cold and docker jobs stagger 10 s apart. Each run prints stats. Details: the crate README (`toddstack/rust/toddstack_heavy`).
-- Install: `cargo install --locked --root ~/.local/share/heavy-rs toddstack-heavy@0.3.1`, then
+- Install: `cargo install --locked --root ~/.local/share/heavy-rs toddstack-heavy@0.3.2`, then
   `ln -sfn ~/.local/share/heavy-rs/bin/heavy ~/.local/bin/heavy`.
 - Heavy fixes go only into the Rust crate; the old bash `heavy` is retired.
 - For heavy work it cannot wrap (an Xcode GUI build), check `uptime` first and wait while the load is above
