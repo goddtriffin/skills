@@ -21,10 +21,10 @@ All sessions share one laptop. On 2026-11-19 it hit load 120 on 16 cores and Doc
   `--mem` when the job needs more than the defaults.
 - `heavy status` shows running jobs and current CPU, memory and load.
 - `heavy history --since 2h|1d|7d` shows past jobs, waits and idle-while-waiting time (`--html PATH` for charts).
-- It admits a job on live CPU headroom and memory reservations, with no job cap, and waits while 1-minute or
-  5-minute load is over 2x the number of cores. During its 10 s ramp a job holds its peak cores, which staggers
-  bursts. Each run prints stats. Details: the crate README (`toddstack/rust/toddstack_heavy`).
-- Install: `cargo install --locked --root ~/.local/share/heavy-rs toddstack-heavy@0.2.0`, then
+- It admits a job while CPU is under about 94% and memory is free, with no job cap. Load1 over 2x cores blocks only
+  if CPU is at least 90% or load is rising (load1 > 1.1x load5); 4x cores always blocks; memory pressure blocks.
+  Cold and docker jobs stagger 10 s apart. Each run prints stats. Details: the crate README (`toddstack/rust/toddstack_heavy`).
+- Install: `cargo install --locked --root ~/.local/share/heavy-rs toddstack-heavy@0.3.0`, then
   `ln -sfn ~/.local/share/heavy-rs/bin/heavy ~/.local/bin/heavy`.
 - Heavy fixes go only into the Rust crate; the old bash `heavy` is retired.
 - For heavy work it cannot wrap (an Xcode GUI build), check `uptime` first and wait while the load is above
