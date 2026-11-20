@@ -13,19 +13,19 @@ Several Claude sessions work in the same checkouts and Docker at once. Touch onl
 ### Heavy jobs share the machine (Todd, 2026-11-19)
 
 All sessions share one laptop. On 2026-11-19 it hit load 120 on 16 cores and Docker and background jobs died.
-- Run every heavy command through `heavy` (Rust, crate `toddstack-heavy`): `heavy cargo test`,
-  `heavy make test`, `heavy xcodebuild ...`. Heavy means cargo build, test or clippy, xcodebuild, gradle,
+- Run every heavy command through `stokehold` (Rust, crate `stokehold`; `heavy` stays as an alias for now): `stokehold cargo test`,
+  `stokehold make test`, `stokehold xcodebuild ...`. Heavy means cargo build, test or clippy, xcodebuild, gradle,
   Playwright or UI checks, docker build, benches.
-- Never wrap long-running servers (`make dev`, dev servers, watchers) in `heavy`; only finite builds, tests and lint.
-- Flags: `heavy [--cpu N] [--mem SIZE] [--vram SIZE] [--disk SIZE] [--timeout DURATION] [--] cmd`. Give `--cpu` and
+- Never wrap long-running servers (`make dev`, dev servers, watchers) in `stokehold`; only finite builds, tests and lint.
+- Flags: `stokehold [--cpu N] [--mem SIZE] [--vram SIZE] [--disk SIZE] [--timeout DURATION] [--] cmd`. Give `--cpu` and
   `--mem` when the job needs more than the defaults.
-- `heavy status` shows running jobs and current CPU, memory and load.
-- `heavy history --since 2h|1d|7d` shows past jobs, waits and idle-while-waiting time (`--html PATH` for charts).
+- `stokehold status` shows running jobs and current CPU, memory and load.
+- `stokehold history --since 2h|1d|7d` shows past jobs, waits and idle-while-waiting time (`--html PATH` for charts).
 - It admits a job while CPU is under about 94% and memory is free, with no job cap. Load1 over 2x cores blocks only
   if CPU is at least 90% or load is rising (load1 > 1.1x load5); 4x cores always blocks; memory pressure blocks.
-  Cold and docker jobs stagger 10 s apart. Each run prints stats. Details: the crate README (`toddstack/rust/toddstack_heavy`).
-- Install: `cargo install --locked --root ~/.local/share/heavy-rs toddstack-heavy@0.3.2`, then
-  `ln -sfn ~/.local/share/heavy-rs/bin/heavy ~/.local/bin/heavy`.
+  Cold and docker jobs stagger 10 s apart. Each run prints stats. Details: the crate README (`toddstack/rust/stokehold`).
+- Install: `cargo install --locked --root ~/.local/share/heavy-rs stokehold@0.4.0`, then
+  `ln -sfn ~/.local/share/heavy-rs/bin/stokehold ~/.local/bin/stokehold` and the same for `~/.local/bin/heavy`.
 - Heavy fixes go only into the Rust crate; the old bash `heavy` is retired.
 - For heavy work it cannot wrap (an Xcode GUI build), check `uptime` first and wait while the load is above
   twice the number of cores.
@@ -115,7 +115,7 @@ bulky output kept there is paid for again and again. A helper pays once and retu
     coordinator decides (fixes it or asks Todd).
 - No loops or polling in any session: no `/loop`, no sleep or until loops. Scheduled crons (daily report,
   12-hour monitoring) are fine. Wait with
-  commands that block until the job finishes: a background `heavy ...` command, `gh pr checks --watch`,
+  commands that block until the job finishes: a background `stokehold ...` command, `gh pr checks --watch`,
   `gh event listen`, `botyard watch --once`, task notifications.
 - Batch wake-ups. Background checks are batched (monitoring every 12 hours, not hourly). Helpers report
   once, at the end, short, with no progress messages. Inter-session messages
