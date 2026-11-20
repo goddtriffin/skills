@@ -117,7 +117,8 @@ bulky output kept there is paid for again and again. A helper pays once and retu
 - No loops or polling in any session: no `/loop` with short intervals, no sleep or until loops. Wait with
   commands that block until the job finishes: a background `heavy ...` command, `gh pr checks --watch`,
   `gh event listen`, `botyard watch --once`, task notifications.
-- Batch wake-ups. Helpers report once, at the end, short, with no progress messages. Inter-session messages
+- Batch wake-ups. Background checks are batched (monitoring every 12 hours, not hourly). Helpers report
+  once, at the end, short, with no progress messages. Inter-session messages
   only when another session must act, batched. Builds and tests never run in the main session; they run
   inside helpers.
 - Browser and UI helpers return text findings, never screenshots, to the main agent.
