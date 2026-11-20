@@ -95,7 +95,7 @@ bulky output kept there is paid for again and again. A helper pays once and retu
   pass `model: "sonnet"`). Use `model: "opus"` only for hard design, debugging and PR reviews.
 - The main agent talks with Todd, decides, briefs and merges (only where the repo lets agents
   merge; helpers never do). It delegates bulky or many-step work: implementation, tests, browsers and
-  screenshots, logs and metrics, wide searches. Small things (a few tool calls) it does itself.
+  UI checks, logs and metrics, wide searches. Small things (a few tool calls) it does itself.
 - Brief fully (goal, files, what is ruled out, how to verify); ask for a short report with exact failing
   test names and key error lines. The helper that wrote the code runs its tests and fixes what it can; no
   runner-to-analyst-to-fixer chains.
@@ -112,9 +112,9 @@ bulky output kept there is paid for again and again. A helper pays once and retu
   - Exactly one full review per PR: Opus for non-trivial (risky ones included: auth, migrations, privacy,
     payments), Sonnet for trivial (docs, version bumps).
   - After fixes, a Sonnet re-review of only the fix diff. At most 2 rounds in total. If it still fails, the
-    coordinator decides (fixes it or asks Todd); no endless rounds.
-  - The Docker/image gate is folded into the fix helper.
-- No loops or polling in any session: no `/loop` with short intervals, no sleep or until loops. Wait with
+    coordinator decides (fixes it or asks Todd).
+- No loops or polling in any session: no `/loop`, no sleep or until loops. Scheduled crons (daily report,
+  12-hour monitoring) are fine. Wait with
   commands that block until the job finishes: a background `heavy ...` command, `gh pr checks --watch`,
   `gh event listen`, `botyard watch --once`, task notifications.
 - Batch wake-ups. Background checks are batched (monitoring every 12 hours, not hourly). Helpers report
