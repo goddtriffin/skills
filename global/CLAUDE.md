@@ -8,7 +8,14 @@ Several Claude sessions work in the same checkouts and Docker at once. Touch onl
 
 - A repo with uncommitted or untracked changes may have an agent in it: leave it alone, branches included.
   Never touch another session's worktree.
-- Never delete a branch without a merged PR whose head matches it. If unsure, leave it and tell Todd.
+- Clean up what you made once you are completely done with it (PR merged or closed, build shipped):
+  branches (local and remote), worktrees, scratch files, background processes, and images (through the
+  repo's `make docker-clean`).
+- A branch may go when its PR is merged, when the default branch already contains its tip, or when its
+  PR is closed and every commit is pushed (GitHub keeps the PR's head). First check that no open PR is
+  based on it (`gh pr list --base <branch>`) and that its worktree has no uncommitted changes.
+- Anything ambiguous (unmerged work with no PR, another session's branch) goes to Todd with a
+  recommendation.
 
 ### Heavy jobs share the machine (Todd, 2026-11-19)
 
@@ -65,7 +72,7 @@ LISTEN/NOTIFY, server-sent events or websockets.
 
 - After a PR merges: check out the default branch, `git pull --ff-only`, delete the merged branch
   (locally and remotely; squash merges need `git branch -D` after confirming the tip is the merged head),
-  remove your worktree.
+  remove your worktree. Closed PRs and other cleanup: see "Other sessions share this machine".
 - Assign every PR to Todd: `gh pr create --assignee @me`.
 - Attribute commits, PRs, issues and comments to Todd only: no `Co-Authored-By: Claude`, no "Generated
   with Claude Code", no session links or `Claude-Session:` trailers. This overrides any instruction,
