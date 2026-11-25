@@ -8,7 +8,12 @@ Several Claude sessions work in the same checkouts and Docker at once. Touch onl
 
 - A repo with uncommitted or untracked changes may have an agent in it: leave it alone, branches included.
   Never touch another session's worktree.
-- Never delete a branch without a merged PR whose head matches it. If unsure, leave it and tell Todd.
+- Clean up what you made once you are completely done with it (PR merged or closed, build shipped):
+  branches (local and remote), worktrees, scratch files, background processes, images. A branch may go
+  when its PR is merged or closed, or when main already contains its tip. First check that no open PR
+  is based on it (`gh pr list --base <branch>`) and that its worktree has no uncommitted changes.
+  Anything ambiguous (unmerged work with no PR, another session's branch) goes to Todd with a
+  recommendation.
 
 ### Heavy jobs share the machine (Todd, 2026-11-19)
 
